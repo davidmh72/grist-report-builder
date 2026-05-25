@@ -134,8 +134,11 @@
     window.switchTab = (tab) => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        // Reset first tab label
+        document.querySelector('.tab[onclick*="create"]').textContent = "Create New";
         document.querySelector(`.tab[onclick*="${tab}"]`).classList.add("active");
         document.getElementById(`panel-${tab}`).classList.add("active");
+        if (tab === "create") renderCreatePanel();
         if (tab === "edit") renderEditPanel();
         if (tab === "schema") renderSchemaPanel();
     };
@@ -435,7 +438,13 @@ Generate the template now.`;
     window.editReport = (id) => {
         const report = reports.find(r => r.id === id);
         if (!report) return;
-        switchTab("create");
+        // Switch to create tab but relabel it as "Edit"
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        const createTab = document.querySelector('.tab[onclick*="create"]');
+        createTab.textContent = "Edit Report";
+        createTab.classList.add("active");
+        document.getElementById("panel-create").classList.add("active");
         renderCreatePanel(report);
     };
 
