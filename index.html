@@ -214,7 +214,7 @@
                 </div>
                 <div class="btn-row">
                     <button class="btn btn-primary" onclick="previewReport()">👁 Preview</button>
-                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"})">💾 ${isEdit ? "Update" : "Save"} Report</button>
+                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"})">💾 Save Report</button>
                 </div>
             </div>
 
@@ -492,31 +492,58 @@ WHEN GENERATING:
         if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
 
         try {
-            const fields = {
-                Report_Name: name,
-                Description: desc,
-                Link_Table: linkTable,
-                Data_Tables: dataTables,
-                Filter_Mode: mode,
-                Template_HTML: templateHTML,
-                Filters: filters,
-                Report_Requirements: requirements
-            };
+            let saveName = name;
 
             if (existingId) {
-                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, fields]]);
+                // Versioning: create a NEW record with incremented version number
+                // Determine version number from name
+                const versionMatch = name.match(/- Version (\d+)$/);
+                if (versionMatch) {
+                    const nextVersion = parseInt(versionMatch[1]) + 1;
+                    saveName = name.replace(/- Version \d+$/, `- Version ${nextVersion}`);
+                } else {
+                    saveName = name + " - Version 2";
+                }
+
+                // Deactivate the old version
+                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, { Active: false }]]);
+
+                // Create new version
+                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, {
+                    Report_Name: saveName,
+                    Description: desc,
+                    Link_Table: linkTable,
+                    Data_Tables: dataTables,
+                    Filter_Mode: mode,
+                    Template_HTML: templateHTML,
+                    Filters: filters,
+                    Report_Requirements: requirements,
+                    Active: true
+                }]]);
             } else {
-                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
+                // Brand new report
+                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, {
+                    Report_Name: name,
+                    Description: desc,
+                    Link_Table: linkTable,
+                    Data_Tables: dataTables,
+                    Filter_Mode: mode,
+                    Template_HTML: templateHTML,
+                    Filters: filters,
+                    Report_Requirements: requirements,
+                    Active: true
+                }]]);
             }
 
             // Refresh reports list
             reports = await fetchTable(REPORTS_TABLE);
+            reports = reports.filter(r => r.Active === true);
 
             // Show saved confirmation
             app.innerHTML = `<div style="text-align:center; padding:60px 20px;">
                 <div style="font-size:48px; margin-bottom:16px;">✅</div>
-                <h2 style="font-size:18px; color:#16b378; margin-bottom:8px;">Report ${existingId ? "Updated" : "Saved"}!</h2>
-                <p style="font-size:13px; color:#666;">"${name}" has been ${existingId ? "updated" : "saved"} to ${REPORTS_TABLE}.</p>
+                <h2 style="font-size:18px; color:#16b378; margin-bottom:8px;">Report Saved!</h2>
+                <p style="font-size:13px; color:#666;">"${saveName}" has been saved to ${REPORTS_TABLE}.</p>
                 <button class="btn btn-primary" onclick="switchTab('create')" style="margin-top:20px;">← Back to Builder</button>
             </div>`;
         } catch(e) {
@@ -726,7 +753,8 @@ WHEN GENERATING:
             console.log(`📋 ${WIDGET_NAME}: Schema loaded (${Object.keys(schema).length} tables)`);
             console.log(`📋 ${WIDGET_NAME}: Fetching ${REPORTS_TABLE}...`);
             reports = await fetchTable(REPORTS_TABLE);
-            console.log(`📋 ${WIDGET_NAME}: ${reports.length} reports loaded`);
+            reports = reports.filter(r => r.Active === true);
+            console.log(`📋 ${WIDGET_NAME}: ${reports.length} active reports loaded`);
             renderCreatePanel();
         } catch(e) {
             console.error(`📋 ${WIDGET_NAME}: Init failed:`, e);
