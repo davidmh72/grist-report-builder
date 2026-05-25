@@ -73,7 +73,7 @@
 <body>
 <div class="builder">
     <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance</div>
+    <div class="subtitle">Create and edit report templates with AI assistance — v1.0.1</div>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('create')">Create New</div>
@@ -262,20 +262,48 @@ DATA STRUCTURE:
 - data-chart-group auto-counts occurrences — no need to pre-aggregate data.
 
 HANDLEBARS HELPERS:
-  Loops: {{#each arr}}...{{/each}}
-  Conditionals: {{#if (eq Status "Active")}}...{{/if}}
-  Grouping: {{#groupBy arr "field"}} → {{key}}, {{items}}, {{count}} {{/groupBy}}
-  Filtering: {{#filterBy arr "field" "value"}} → {{items}}, {{count}} {{/filterBy}}
-  Sorting: {{sortBy arr "field" "asc"}}
-  Aggregation: {{count arr}}, {{sum arr "field"}}, {{avg arr "field"}}, {{max arr "field"}}, {{min arr "field"}}
-  Math: {{add a b}}, {{subtract a b}}, {{multiply a b}}, {{divide a b}}, {{percent a b}}, {{round n 2}}
-  Dates: {{formatDate field}}, {{formatDateTime field}}, {{now}}, {{year field}}, {{monthName 5}}, {{dayOfWeek field}}
-  Strings: {{uppercase str}}, {{lowercase str}}, {{truncate str 20}}, {{replace str "old" "new"}}
-  Comparison: {{eq a b}}, {{neq a b}}, {{gt a b}}, {{lt a b}}, {{gte a b}}, {{lte a b}}
-  Logic: {{and a b}}, {{or a b}}, {{not a}}
-  Layout: {{pageBreak}}, {{#columns 2}}...{{/columns}}
-  Calendar: {{#monthGrid year month}}{{#each days}}...{{/each}}{{/monthGrid}}, {{monthName n}}
-  Unique values: {{unique arr "field"}}
+  BLOCK helpers (use {{#helper}}...{{/helper}}, render inner content):
+    {{#each arr}}...{{/each}} — loop over array
+    {{#if condition}}...{{/if}} — conditional block
+    {{#groupBy arr "field"}}...{{/groupBy}} — groups rows, provides {{key}}, {{items}}, {{count}}
+    {{#filterBy arr "field" "value"}}...{{/filterBy}} — filters rows, provides {{items}}, {{count}}
+    {{#columns N}}...{{/columns}} — multi-column CSS layout
+    {{#monthGrid year month}}{{#each days}}...{{/each}}{{/monthGrid}} — calendar grid
+
+  INLINE helpers (use {{helper args}}, return a value directly):
+    {{count arr}} — array length (number)
+    {{sum arr "field"}} — sum of numeric field
+    {{avg arr "field"}} — average
+    {{max arr "field"}} — maximum
+    {{min arr "field"}} — minimum
+    {{percent a b}} — percentage string "45.2%"
+    {{round n 2}} — round to N decimals
+    {{add a b}}, {{subtract a b}}, {{multiply a b}}, {{divide a b}} — arithmetic
+    {{formatDate field}} — format epoch seconds to "25 May 2025"
+    {{formatDateTime field}} — "25 May 2025 14:30"
+    {{now}} — current date as formatted string (NOT a timestamp — do not pass to formatDate)
+    {{year field}}, {{month field}}, {{dayOfWeek field}} — extract date parts
+    {{monthName 5}} — "June"
+    {{uppercase str}}, {{lowercase str}}, {{truncate str 20}}, {{replace str "old" "new"}}
+    {{eq a b}}, {{neq a b}}, {{gt a b}}, {{lt a b}}, {{gte a b}}, {{lte a b}} — return true/false
+    {{and a b}}, {{or a b}}, {{not a}} — logic
+    {{pageBreak}} — insert print page break
+    {{unique arr "field"}} — returns array of unique values
+
+  SUB-EXPRESSION helpers (can be used inside parentheses):
+    {{#each (sortBy arr "field" "asc")}} ✓ — sortBy returns an array
+    {{#if (eq Status "Active")}} ✓ — eq returns true/false
+    {{#if (gt (count arr) 10)}} ✓ — count returns a number
+    {{#each (unique arr "field")}} ✓ — unique returns an array
+
+  CANNOT be used as sub-expressions (they are block helpers):
+    {{count (filterBy ...)}} ✗ — filterBy is a BLOCK helper
+    {{count (groupBy ...)}} ✗ — groupBy is a BLOCK helper
+    {{formatDateTime (now)}} ✗ — now returns a string, not a timestamp
+
+  CORRECT PATTERNS for filtered counts:
+    {{#filterBy Contacts "Status" "Active"}}{{count items}}{{/filterBy}}
+    {{#filterBy Contacts "Status" "Active"}}{{percent count (count ../Contacts)}}{{/filterBy}}
 
 VISUAL ELEMENTS:
   Charts: <canvas data-chart-type="TYPE" data-chart-table="Table" data-chart-group="Field" data-chart-title="Title">
@@ -614,14 +642,23 @@ Generate the template now.`;
         `;
     }
 
+    const WIDGET_NAME = "Report Builder";
+    const WIDGET_VERSION = "1.0.1";
+
     // ── Initialise ──────────────────────────────────────────────────────────
+    console.log(`📋 ${WIDGET_NAME} v${WIDGET_VERSION} loading...`);
     setTimeout(async () => {
         try {
+            console.log(`📋 ${WIDGET_NAME}: Fetching schema...`);
             schema = await getSchema();
+            console.log(`📋 ${WIDGET_NAME}: Schema loaded (${Object.keys(schema).length} tables)`);
+            console.log(`📋 ${WIDGET_NAME}: Fetching ${REPORTS_TABLE}...`);
             reports = await fetchTable(REPORTS_TABLE);
+            console.log(`📋 ${WIDGET_NAME}: ${reports.length} reports loaded`);
             renderCreatePanel();
         } catch(e) {
-            document.getElementById("panel-create").innerHTML = `<div class="status status-error">Error: ${e.message}</div>`;
+            console.error(`📋 ${WIDGET_NAME}: Init failed:`, e);
+            document.getElementById("panel-create").innerHTML = `<div class="status status-error">Error: ${e.message}<br><small>${WIDGET_NAME} v${WIDGET_VERSION}</small></div>`;
         }
     }, 500);
 
