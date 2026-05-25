@@ -254,6 +254,9 @@ OUTPUT RULES:
 - Start with <style> and end with the final </div>.
 - Use a <style> block for all CSS. Use CSS Grid for dashboard layouts.
 - Include @media print { } rules for clean PDF output (hide non-essential elements, avoid page-break inside cards).
+- ABSOLUTELY NO <script> TAGS OR JAVASCRIPT. The template is injected via innerHTML which does not execute scripts. All interactivity is handled by declarative data attributes (see VISUAL ELEMENTS below).
+- Do NOT use DOMContentLoaded, window.onload, setTimeout, or any JS initialisation code.
+- Do NOT generate the template immediately. First, ask 3-5 clarifying questions about the report requirements (layout preferences, which fields to highlight, colour scheme, print orientation, grouping logic). Then generate the template after receiving answers.
 
 DATA STRUCTURE:
 - Data is an object where each table name is a key containing an array of row objects.
@@ -308,11 +311,27 @@ HANDLEBARS HELPERS:
 VISUAL ELEMENTS:
   Charts: <canvas data-chart-type="TYPE" data-chart-table="Table" data-chart-group="Field" data-chart-title="Title">
     Types: bar, line, pie, doughnut, radar, polarArea, scatter, bubble
-    Advanced: <canvas data-chart='{"type":"radar","data":{"labels":[...],"datasets":[{"label":"...","data":[...]}]},"options":{}}'>
+    Advanced (full Chart.js config): <canvas data-chart='{"type":"radar","data":{"labels":[...],"datasets":[...]},"options":{}}'>
   Maps: <div data-map data-map-table="Table" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="Name" data-map-colour="Status" style="height:400px"></div>
+    Add data-map-cluster="true" for marker clustering (groups nearby pins)
+    Add data-map-heat="true" for heatmap mode (density visualisation)
   QR codes: <div data-qr="{{field}}" data-qr-size="128"></div>
   Barcodes: <div data-barcode="{{field}}" data-barcode-format="CODE128"></div>
   Images: <img data-asset="filename.png">
+
+VISUAL HELPERS (inline, return rendered HTML):
+  {{progressBar value max}} — inline green progress bar
+  {{stars 3 5}} — ★★★☆☆ star rating
+  {{colourScale value min max}} — coloured dot (green-to-red scale)
+  {{initials "John Smith"}} — coloured circle avatar with "JS"
+  {{watermark "DRAFT"}} — faint diagonal background text
+  {{signatureLine "Approved by"}} — signature line for printed forms
+  {{#labels 3}}...{{/labels}} — grid layout for mailing labels (N columns)
+
+FORMATTING HELPERS (inline, return text):
+  {{formatNumber 1234567}} — "1,234,567"
+  {{currency value "GBP"}} — £1,234.56 (supports any ISO currency code)
+  {{timeAgo timestamp}} — "3 days ago", "2 months ago"
 
 STYLE GUIDE:
 - Professional, clean, modern. Think Power BI / executive dashboard.
@@ -329,7 +348,7 @@ ${schemaText}
 REPORT REQUEST:
 ${request}
 
-Generate the template now.`;
+IMPORTANT: Do NOT generate the template yet. First, ask 3-5 clarifying questions to ensure you understand exactly what is needed (e.g. "Should the table show all fields or just key ones?", "Do you want a dark or light theme?", "Should records be grouped by any field?", "Portrait or landscape for print?"). After I answer, then generate the final template.`;
 
         document.getElementById("prompt-text").textContent = prompt;
         document.getElementById("prompt-output").style.display = "block";
@@ -540,6 +559,8 @@ Generate the template now.`;
 
             <h4 style="margin:16px 0 8px; color:#16b378;">🗺️ Maps (Leaflet)</h4>
             <p><code>&lt;div data-map data-map-table="Contacts" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="First_Name" data-map-colour="Status" style="height:400px"&gt;&lt;/div&gt;</code></p>
+            <p><strong>Clustering:</strong> Add <code>data-map-cluster="true"</code> to group nearby pins into numbered bubbles.</p>
+            <p><strong>Heatmap:</strong> Add <code>data-map-heat="true"</code> to show density instead of pins.</p>
             <p>Requires Latitude/Longitude numeric columns. Use the Geocode Tool to populate them.</p>
 
             <h4 style="margin:16px 0 8px; color:#16b378;">📱 QR Codes</h4>
@@ -569,6 +590,21 @@ Generate the template now.`;
                 <tr><td><code>{{#groupBy arr "field"}}...{{/groupBy}}</code></td><td>Group rows by a field</td></tr>
                 <tr><td><code>{{#filterBy arr "field" "value"}}...{{/filterBy}}</code></td><td>Filter rows</td></tr>
                 <tr><td><code>{{sortBy arr "field" "asc"}}</code></td><td>Sort rows</td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🎨 Visual & Formatting Helpers</h4>
+            <table class="schema-table">
+                <tr><th>Helper</th><th>Output</th></tr>
+                <tr><td><code>{{progressBar value max}}</code></td><td>Inline progress bar (green fill)</td></tr>
+                <tr><td><code>{{stars 3 5}}</code></td><td>★★★☆☆ star rating</td></tr>
+                <tr><td><code>{{colourScale value min max}}</code></td><td>Coloured dot (green→red scale)</td></tr>
+                <tr><td><code>{{initials "John Smith"}}</code></td><td>Coloured circle avatar with "JS"</td></tr>
+                <tr><td><code>{{timeAgo timestamp}}</code></td><td>"3 days ago", "2 months ago"</td></tr>
+                <tr><td><code>{{formatNumber 1234567}}</code></td><td>1,234,567</td></tr>
+                <tr><td><code>{{currency value "GBP"}}</code></td><td>£1,234.56</td></tr>
+                <tr><td><code>{{watermark "DRAFT"}}</code></td><td>Faint diagonal text behind report</td></tr>
+                <tr><td><code>{{signatureLine "Approved by"}}</code></td><td>Signature line for printed forms</td></tr>
+                <tr><td><code>{{#labels 3}}...{{/labels}}</code></td><td>Grid layout for mailing labels (3 columns)</td></tr>
             </table>
 
             <h4 style="margin:16px 0 8px; color:#16b378;">🔢 Data Helpers</h4>
