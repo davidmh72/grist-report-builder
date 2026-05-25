@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grist Report Builder</title>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/handlebars@4.7.8/dist/handlebars.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 16px; color: #333; background: #f8f9fa; }
+
+        .builder { max-width: 800px; margin: 0 auto; }
+        .builder h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #264653; }
+        .builder .subtitle { font-size: 12px; color: #888; margin-bottom: 20px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #eee; }
+        .tab { padding: 10px 20px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; }
+        .tab.active { color: #16b378; border-bottom-color: #16b378; }
+        .tab:hover { color: #333; }
+
+        /* Panels */
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Form elements */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; }
+        .form-group textarea { min-height: 100px; resize: vertical; }
+        .form-group .hint { font-size: 10px; color: #aaa; margin-top: 4px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* Prompt output */
+        .prompt-box { background: #1a1a2e; color: #e0e0e0; border-radius: 8px; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto; margin-bottom: 12px; }
+        .template-box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; min-height: 200px; resize: vertical; width: 100%; }
+
+        /* Buttons */
+        .btn { padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+        .btn:hover { background: #f0f0f0; }
+        .btn-primary { background: #16b378; color: #fff; border-color: #16b378; }
+        .btn-primary:hover { background: #12956a; }
+        .btn-secondary { background: #264653; color: #fff; border-color: #264653; }
+        .btn-secondary:hover { background: #1a3540; }
+        .btn-danger { background: #fff; color: #e53935; border-color: #e53935; }
+        .btn-danger:hover { background: #fef0f0; }
+        .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+
+        /* Schema display */
+        .schema-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+        .schema-table th { background: #264653; color: #fff; padding: 6px 10px; text-align: left; }
+        .schema-table td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; }
+        .schema-table tr:hover td { background: #f8f8f8; }
+
+        /* Preview */
+        .preview-frame { border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fff; min-height: 200px; overflow: auto; }
+
+        /* Status messages */
+        .status { padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; }
+        .status-success { background: #e1fede; color: #16b378; }
+        .status-error { background: #fef0f0; color: #e53935; }
+
+        /* Report list for editing */
+        .report-list { list-style: none; }
+        .report-list li { padding: 10px 14px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .report-list li:hover { border-color: #16b378; background: #f8fdf8; }
+        .report-list .name { font-weight: 600; font-size: 13px; }
+        .report-list .meta { font-size: 11px; color: #888; }
+    </style>
+</head>
+<body>
+<div class="builder">
+    <h1>Report Builder</h1>
+    <div class="subtitle">Create and edit report templates with AI assistance</div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('create')">Create New</div>
+        <div class="tab" onclick="switchTab('edit')">Edit Existing</div>
+        <div class="tab" onclick="switchTab('schema')">Schema Reference</div>
+    </div>
+
+    <div id="panel-create" class="panel active"></div>
+    <div id="panel-edit" class="panel"></div>
+    <div id="panel-schema" class="panel"></div>
+</div>
+
+<script>
+(async function() {
+    "use strict";
+
+    const REPORTS_TABLE = "SysReports";
+
+    // ── Grist Plugin API ──────────────────────────────────────────────────
+    grist.ready({ requiredAccess: "full", columns: [] });
+
+    async function fetchTable(tableId) {
+        const data = await grist.docApi.fetchTable(tableId);
+        const columns = Object.keys(data);
+        if (columns.length === 0) return [];
+        const rowCount = data.id ? data.id.length : data[columns[0]].length;
+        const rows = [];
+        for (let i = 0; i < rowCount; i++) {
+            const row = {};
+            for (const col of columns) row[col] = data[col][i];
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    async function getSchema() {
+        const tables = await fetchTable("_grist_Tables");
+        const columns = await fetchTable("_grist_Tables_column");
+        const schema = {};
+        tables.forEach(t => {
+            if (t.tableId && !t.tableId.startsWith("_grist") && !t.tableId.startsWith("GristHidden")) {
+                schema[t.tableId] = { id: t.id, columns: [] };
+            }
+        });
+        columns.forEach(c => {
+            const table = tables.find(t => t.id === c.parentId);
+            if (table && schema[table.tableId] && c.colId && !c.colId.startsWith("gristHelper")) {
+                schema[table.tableId].columns.push({ name: c.colId, type: c.type, label: c.label || c.colId });
+            }
+        });
+        return schema;
+    }
+
+    let schema = {};
+    let reports = [];
+
+    // ── Tab switching ────────────────────────────────────────────────────
+    window.switchTab = (tab) => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        document.querySelector(`.tab[onclick*="${tab}"]`).classList.add("active");
+        document.getElementById(`panel-${tab}`).classList.add("active");
+        if (tab === "edit") renderEditPanel();
+        if (tab === "schema") renderSchemaPanel();
+    };
+
+    // ── Create Panel ──────────────────────────────────────────────────────
+    function renderCreatePanel(existingReport) {
+        const tableOptions = Object.keys(schema).map(t => `<option value="${t}">${t}</option>`).join("");
+        const isEdit = !!existingReport;
+        const r = existingReport || {};
+
+        document.getElementById("panel-create").innerHTML = `
+            <div id="status-area"></div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Report Name</label>
+                    <input type="text" id="rpt-name" value="${r.Report_Name || ""}" placeholder="e.g. Contact Activity Dashboard">
+                </div>
+                <div class="form-group">
+                    <label>Filter Mode</label>
+                    <select id="rpt-mode">
+                        <option value="all" ${r.Filter_Mode === "all" ? "selected" : ""}>All (no filter)</option>
+                        <option value="record" ${r.Filter_Mode === "record" ? "selected" : ""}>Record (selected record)</option>
+                        <option value="filtered" ${r.Filter_Mode === "filtered" ? "selected" : ""}>Filtered (popup)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Link Table (which page it appears on)</label>
+                    <select id="rpt-link"><option value="">-- Select --</option>${tableOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label>Data Tables (comma-separated)</label>
+                    <input type="text" id="rpt-data" value="${r.Data_Tables || ""}" placeholder="e.g. Contacts,OrganisationContacts">
+                    <div class="hint">All tables the report needs data from</div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="rpt-desc" value="${r.Description || ""}" placeholder="Brief description of what this report shows">
+            </div>
+            <div class="form-group">
+                <label>What do you want the report to show? (for AI prompt)</label>
+                <textarea id="rpt-request" placeholder="e.g. A dashboard with KPI cards showing total contacts, active vs inactive. Bar chart of contacts by country. Table listing all contacts with name, email, status, and last updated date. Use a dark header theme.">${r._request || ""}</textarea>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-secondary" onclick="generatePrompt()">📋 Generate AI Prompt</button>
+                ${isEdit ? `<button class="btn btn-danger" onclick="switchTab('edit')">Cancel Edit</button>` : ""}
+            </div>
+
+            <div id="prompt-output" style="margin-top: 20px; display: none;">
+                <div class="form-group">
+                    <label>AI Prompt (copy this to ChatGPT/Claude)</label>
+                    <div class="prompt-box" id="prompt-text"></div>
+                    <div class="btn-row">
+                        <button class="btn" onclick="copyPrompt()">📋 Copy to Clipboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px;">
+                <div class="form-group">
+                    <label>Template HTML (paste AI output here)</label>
+                    <textarea class="template-box" id="rpt-template" placeholder="Paste the HTML template from the AI here...">${r.Template_HTML || ""}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Filters JSON (optional, for filtered mode)</label>
+                    <textarea id="rpt-filters" style="min-height: 60px; font-family: monospace; font-size: 11px;" placeholder='[{"field":"Status","label":"Status","type":"choice","table":"Contacts"}]'>${r.Filters || ""}</textarea>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="previewReport()">👁 Preview</button>
+                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"})">💾 ${isEdit ? "Update" : "Save"} Report</button>
+                </div>
+            </div>
+
+            <div id="preview-area" style="margin-top: 20px; display: none;">
+                <label style="font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; margin-bottom: 8px; display: block;">Preview</label>
+                <div class="preview-frame" id="preview-frame"></div>
+            </div>
+        `;
+
+        if (r.Link_Table) document.getElementById("rpt-link").value = r.Link_Table;
+    }
+
+    // ── Prompt Generator ────────────────────────────────────────────────────
+    window.generatePrompt = () => {
+        const linkTable = document.getElementById("rpt-link").value;
+        const dataTables = document.getElementById("rpt-data").value || linkTable;
+        const request = document.getElementById("rpt-request").value;
+        const mode = document.getElementById("rpt-mode").value;
+
+        const tables = dataTables.split(",").map(t => t.trim()).filter(Boolean);
+        let schemaText = "";
+        tables.forEach(t => {
+            if (schema[t]) {
+                schemaText += `\nTable: ${t}\nColumns:\n`;
+                schema[t].columns.forEach(c => {
+                    schemaText += `  - ${c.name} (${c.type})${c.label !== c.name ? ` [label: "${c.label}"]` : ""}\n`;
+                });
+            }
+        });
+
+        const prompt = `You are a report template designer for a Grist spreadsheet reporting system.
+
+Generate a complete HTML template (HTML + inline CSS + Handlebars placeholders) for the following report.
+
+RULES:
+- Output ONLY the HTML. No markdown, no code fences, no explanation.
+- Start with <style> and end with the final </div>.
+- Use Handlebars syntax for data binding.
+- Data is passed as an object where each table is a key containing an array of row objects.
+  Example: {{#each ${tables[0]}}}...{{/${tables[0]}}}
+- Available Handlebars helpers:
+  {{#each array}} {{/each}} — loop
+  {{#if condition}} {{/if}} — conditional
+  {{#groupBy array "field"}} {{key}} {{items}} {{count}} {{/groupBy}} — group rows
+  {{#filterBy array "field" "value"}} {{items}} {{count}} {{/filterBy}} — filter rows
+  {{count array}} — array length
+  {{sum array "field"}} — sum numeric field
+  {{avg array "field"}} — average
+  {{percent numerator denominator}} — percentage string
+  {{formatDate field}} — format Grist date (epoch seconds)
+  {{now}} — current date string
+  {{eq a b}}, {{gt a b}}, {{lt a b}} — comparisons (use with #if)
+  {{uppercase str}}, {{truncate str length}}
+- For charts, use: <canvas data-chart-type="bar|line|pie|doughnut" data-chart-table="TableName" data-chart-group="FieldName" data-chart-title="Title">
+- For assets/logos: <img data-asset="filename.png">
+- Use professional styling: clean typography, subtle borders, colour-coded badges.
+- Include @media print rules for clean PDF output.
+- Make it look like a Power BI dashboard: KPI cards, charts, clean tables.
+${mode === "record" ? "- This is a SINGLE RECORD report. Data will contain only one row in the primary table. Show all fields in a detail layout." : ""}
+${mode === "filtered" ? "- This report will be pre-filtered before rendering. Show summary stats and charts for the filtered dataset." : ""}
+
+DATABASE SCHEMA:
+${schemaText}
+
+REPORT REQUEST:
+${request}
+
+Generate the template now.`;
+
+        document.getElementById("prompt-text").textContent = prompt;
+        document.getElementById("prompt-output").style.display = "block";
+    };
+
+    window.copyPrompt = () => {
+        const text = document.getElementById("prompt-text").textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            showStatus("Prompt copied to clipboard!", "success");
+        });
+    };
+
+    // ── Preview ────────────────────────────────────────────────────────────
+    window.previewReport = async () => {
+        const templateHTML = document.getElementById("rpt-template").value;
+        const dataTables = (document.getElementById("rpt-data").value || document.getElementById("rpt-link").value).split(",").map(t => t.trim()).filter(Boolean);
+
+        if (!templateHTML) { showStatus("Paste a template first", "error"); return; }
+
+        try {
+            const data = {};
+            await Promise.all(dataTables.map(async (table) => { data[table] = await fetchTable(table); }));
+            data._meta = { reportName: "Preview", generatedAt: new Date().toLocaleString("en-GB"), recordCounts: {} };
+            for (const [t, rows] of Object.entries(data)) { if (t !== "_meta") data._meta.recordCounts[t] = rows.length; }
+
+            // Register helpers (same as report widget)
+            registerHelpers();
+
+            const template = Handlebars.compile(templateHTML);
+            const html = template(data);
+
+            const frame = document.getElementById("preview-frame");
+            frame.innerHTML = html;
+            document.getElementById("preview-area").style.display = "block";
+
+            // Render charts in preview
+            frame.querySelectorAll("canvas[data-chart-type]").forEach(canvas => {
+                try {
+                    const type = canvas.dataset.chartType;
+                    const tableData = data[canvas.dataset.chartTable];
+                    const groupField = canvas.dataset.chartGroup;
+                    const title = canvas.dataset.chartTitle || "";
+                    if (!Array.isArray(tableData)) return;
+                    const groups = {};
+                    tableData.forEach(row => { const k = row[groupField] || "(blank)"; groups[k] = (groups[k] || 0) + 1; });
+                    const colours = ["#16b378","#e63946","#457b9d","#f4a261","#6a4c93","#2a9d8f","#e76f51","#264653"];
+                    new Chart(canvas, { type, data: { labels: Object.keys(groups), datasets: [{ data: Object.values(groups), backgroundColor: Object.keys(groups).map((_, i) => colours[i % colours.length]) }] }, options: { responsive: true, plugins: { title: { display: !!title, text: title }, legend: { display: type === "pie" || type === "doughnut" } } } });
+                } catch(e) { console.error("Preview chart error:", e); }
+            });
+
+            showStatus("Preview rendered successfully", "success");
+        } catch(e) {
+            showStatus("Preview error: " + e.message, "error");
+        }
+    };
+
+    function registerHelpers() {
+        const h = Handlebars;
+        if (h._buildersRegistered) return;
+        h._buildersRegistered = true;
+        h.registerHelper("eq", (a, b) => a === b);
+        h.registerHelper("neq", (a, b) => a !== b);
+        h.registerHelper("gt", (a, b) => a > b);
+        h.registerHelper("lt", (a, b) => a < b);
+        h.registerHelper("gte", (a, b) => a >= b);
+        h.registerHelper("lte", (a, b) => a <= b);
+        h.registerHelper("and", (a, b) => a && b);
+        h.registerHelper("or", (a, b) => a || b);
+        h.registerHelper("not", (a) => !a);
+        h.registerHelper("add", (a, b) => Number(a) + Number(b));
+        h.registerHelper("subtract", (a, b) => Number(a) - Number(b));
+        h.registerHelper("multiply", (a, b) => Number(a) * Number(b));
+        h.registerHelper("divide", (a, b) => b !== 0 ? Number(a) / Number(b) : 0);
+        h.registerHelper("percent", (a, b) => b !== 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%");
+        h.registerHelper("round", (n, d) => Number(n).toFixed(typeof d === "number" ? d : 0));
+        h.registerHelper("count", (arr) => Array.isArray(arr) ? arr.length : 0);
+        h.registerHelper("sum", function(arr, key) { if (!Array.isArray(arr)) return 0; return arr.reduce((s, i) => s + (Number(i[key]) || 0), 0); });
+        h.registerHelper("avg", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return (arr.reduce((s, i) => s + (Number(i[key]) || 0), 0) / arr.length).toFixed(1); });
+        h.registerHelper("max", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.max(...arr.map(i => Number(i[key]) || 0)); });
+        h.registerHelper("min", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.min(...arr.map(i => Number(i[key]) || 0)); });
+        h.registerHelper("unique", function(arr, key) { if (!Array.isArray(arr)) return []; return [...new Set(arr.map(i => i[key]).filter(Boolean))]; });
+        h.registerHelper("groupBy", function(arr, key, options) { if (!Array.isArray(arr)) return ""; const g = {}; arr.forEach(i => { const k = i[key] || "(blank)"; if (!g[k]) g[k] = []; g[k].push(i); }); let o = ""; for (const [k, items] of Object.entries(g)) o += options.fn({ key: k, items, count: items.length }); return o; });
+        h.registerHelper("filterBy", function(arr, key, value, options) { if (!Array.isArray(arr)) return ""; const f = arr.filter(i => i[key] === value); return options.fn({ items: f, count: f.length }); });
+        h.registerHelper("sortBy", function(arr, key, dir) { if (!Array.isArray(arr)) return []; const s = [...arr].sort((a, b) => a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0); return dir === "desc" ? s.reverse() : s; });
+        h.registerHelper("formatDate", (val) => { if (!val) return ""; return new Date(val * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); });
+        h.registerHelper("now", () => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }));
+        h.registerHelper("uppercase", (s) => String(s || "").toUpperCase());
+        h.registerHelper("lowercase", (s) => String(s || "").toLowerCase());
+        h.registerHelper("truncate", (s, len) => { const str = String(s || ""); return str.length > len ? str.slice(0, len) + "..." : str; });
+    }
+
+    // ── Save Report ────────────────────────────────────────────────────────
+    window.saveReport = async (existingId) => {
+        const name = document.getElementById("rpt-name").value.trim();
+        const desc = document.getElementById("rpt-desc").value.trim();
+        const linkTable = document.getElementById("rpt-link").value;
+        const dataTables = document.getElementById("rpt-data").value.trim();
+        const mode = document.getElementById("rpt-mode").value;
+        const templateHTML = document.getElementById("rpt-template").value;
+        const filters = document.getElementById("rpt-filters").value.trim();
+
+        if (!name) { showStatus("Report name is required", "error"); return; }
+        if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
+
+        try {
+            if (existingId) {
+                // Update existing report
+                await grist.docApi.applyUserActions([
+                    ["UpdateRecord", REPORTS_TABLE, existingId, {
+                        Report_Name: name,
+                        Description: desc,
+                        Link_Table: linkTable,
+                        Data_Tables: dataTables,
+                        Filter_Mode: mode,
+                        Template_HTML: templateHTML,
+                        Filters: filters
+                    }]
+                ]);
+                showStatus(`Report "${name}" updated successfully!`, "success");
+            } else {
+                // Create new report
+                await grist.docApi.applyUserActions([
+                    ["AddRecord", REPORTS_TABLE, null, {
+                        Report_Name: name,
+                        Description: desc,
+                        Link_Table: linkTable,
+                        Data_Tables: dataTables,
+                        Filter_Mode: mode,
+                        Template_HTML: templateHTML,
+                        Filters: filters
+                    }]
+                ]);
+                showStatus(`Report "${name}" saved successfully!`, "success");
+            }
+            // Refresh reports list
+            reports = await fetchTable(REPORTS_TABLE);
+        } catch(e) {
+            showStatus("Save failed: " + e.message, "error");
+        }
+    };
+
+    // ── Edit Panel ──────────────────────────────────────────────────────────
+    function renderEditPanel() {
+        if (reports.length === 0) {
+            document.getElementById("panel-edit").innerHTML = `<p style="color: #888; font-size: 13px;">No reports found in ${REPORTS_TABLE}.</p>`;
+            return;
+        }
+        let html = `<ul class="report-list">`;
+        reports.forEach(r => {
+            html += `<li onclick="editReport(${r.id})"><div><span class="name">${r.Report_Name || "Untitled"}</span><br><span class="meta">${r.Link_Table || ""} · ${r.Filter_Mode || "all"}</span></div><span class="meta">${r.Data_Tables || ""}</span></li>`;
+        });
+        html += `</ul>`;
+        document.getElementById("panel-edit").innerHTML = html;
+    }
+
+    window.editReport = (id) => {
+        const report = reports.find(r => r.id === id);
+        if (!report) return;
+        switchTab("create");
+        renderCreatePanel(report);
+    };
+
+    // ── Schema Panel ────────────────────────────────────────────────────────
+    function renderSchemaPanel() {
+        let html = "";
+        for (const [tableName, tableInfo] of Object.entries(schema)) {
+            html += `<h3 style="font-size: 13px; margin: 16px 0 8px; color: #264653;">${tableName}</h3>`;
+            html += `<table class="schema-table"><thead><tr><th>Column</th><th>Type</th><th>Label</th></tr></thead><tbody>`;
+            tableInfo.columns.forEach(c => {
+                html += `<tr><td><code>${c.name}</code></td><td>${c.type}</td><td>${c.label}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+        }
+        document.getElementById("panel-schema").innerHTML = html || `<p style="color: #888;">Loading schema...</p>`;
+    }
+
+    // ── Utilities ────────────────────────────────────────────────────────────
+    function showStatus(msg, type) {
+        const area = document.getElementById("status-area");
+        if (area) {
+            area.innerHTML = `<div class="status status-${type}">${msg}</div>`;
+            setTimeout(() => { area.innerHTML = ""; }, 5000);
+        }
+    }
+
+    // ── Initialise ──────────────────────────────────────────────────────────
+    setTimeout(async () => {
+        try {
+            schema = await getSchema();
+            reports = await fetchTable(REPORTS_TABLE);
+            renderCreatePanel();
+        } catch(e) {
+            document.getElementById("panel-create").innerHTML = `<div class="status status-error">Error: ${e.message}</div>`;
+        }
+    }, 500);
+
+})();
+</script>
+</body>
+</html>
