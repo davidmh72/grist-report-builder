@@ -184,8 +184,8 @@
                 <input type="text" id="rpt-desc" value="${r.Description || ""}" placeholder="Brief description of what this report shows">
             </div>
             <div class="form-group">
-                <label>What do you want the report to show? (for AI prompt)</label>
-                <textarea id="rpt-request" placeholder="e.g. A dashboard with KPI cards showing total contacts, active vs inactive. Bar chart of contacts by country. Table listing all contacts with name, email, status, and last updated date. Use a dark header theme.">${r._request || ""}</textarea>
+                <label>Report Requirements (saved for future editing)</label>
+                <textarea id="rpt-request" placeholder="e.g. A dashboard with KPI cards showing total contacts, active vs inactive. Bar chart of contacts by country. Table listing all contacts with name, email, status, and last updated date. Use a dark header theme.">${r.Report_Requirements || ""}</textarea>
             </div>
 
             <div class="btn-row">
@@ -428,42 +428,39 @@ Generate the template now.`;
         const mode = document.getElementById("rpt-mode").value;
         const templateHTML = document.getElementById("rpt-template").value;
         const filters = document.getElementById("rpt-filters").value.trim();
+        const requirements = document.getElementById("rpt-request").value.trim();
 
         if (!name) { showStatus("Report name is required", "error"); return; }
         if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
 
         try {
+            const fields = {
+                Report_Name: name,
+                Description: desc,
+                Link_Table: linkTable,
+                Data_Tables: dataTables,
+                Filter_Mode: mode,
+                Template_HTML: templateHTML,
+                Filters: filters,
+                Report_Requirements: requirements
+            };
+
             if (existingId) {
-                // Update existing report
-                await grist.docApi.applyUserActions([
-                    ["UpdateRecord", REPORTS_TABLE, existingId, {
-                        Report_Name: name,
-                        Description: desc,
-                        Link_Table: linkTable,
-                        Data_Tables: dataTables,
-                        Filter_Mode: mode,
-                        Template_HTML: templateHTML,
-                        Filters: filters
-                    }]
-                ]);
-                showStatus(`Report "${name}" updated successfully!`, "success");
+                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, fields]]);
             } else {
-                // Create new report
-                await grist.docApi.applyUserActions([
-                    ["AddRecord", REPORTS_TABLE, null, {
-                        Report_Name: name,
-                        Description: desc,
-                        Link_Table: linkTable,
-                        Data_Tables: dataTables,
-                        Filter_Mode: mode,
-                        Template_HTML: templateHTML,
-                        Filters: filters
-                    }]
-                ]);
-                showStatus(`Report "${name}" saved successfully!`, "success");
+                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
             }
+
             // Refresh reports list
             reports = await fetchTable(REPORTS_TABLE);
+
+            // Show saved confirmation
+            app.innerHTML = `<div style="text-align:center; padding:60px 20px;">
+                <div style="font-size:48px; margin-bottom:16px;">✅</div>
+                <h2 style="font-size:18px; color:#16b378; margin-bottom:8px;">Report ${existingId ? "Updated" : "Saved"}!</h2>
+                <p style="font-size:13px; color:#666;">"${name}" has been ${existingId ? "updated" : "saved"} to ${REPORTS_TABLE}.</p>
+                <button class="btn btn-primary" onclick="switchTab('create')" style="margin-top:20px;">← Back to Builder</button>
+            </div>`;
         } catch(e) {
             showStatus("Save failed: " + e.message, "error");
         }
