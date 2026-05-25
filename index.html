@@ -86,12 +86,14 @@
         <div class="tab active" onclick="switchTab('create')">Create New</div>
         <div class="tab" onclick="switchTab('edit')">Edit Existing</div>
         <div class="tab" onclick="switchTab('schema')">Schema Reference</div>
+        <div class="tab" onclick="switchTab('import')">Import Spec</div>
         <div class="tab" onclick="switchTab('help')">Help & Features</div>
     </div>
 
     <div id="panel-create" class="panel active"></div>
     <div id="panel-edit" class="panel"></div>
     <div id="panel-schema" class="panel"></div>
+    <div id="panel-import" class="panel"></div>
     <div id="panel-help" class="panel"></div>
 </div>
 
@@ -150,6 +152,7 @@
         if (tab === "create") renderCreatePanel();
         if (tab === "edit") renderEditPanel();
         if (tab === "schema") renderSchemaPanel();
+        if (tab === "import") renderImportPanel();
         if (tab === "help") renderHelpPanel();
     };
 
@@ -637,6 +640,159 @@ WHEN GENERATING:
         if (area) {
             area.innerHTML = `<div class="status status-${type}">${msg}</div>`;
             setTimeout(() => { area.innerHTML = ""; }, 5000);
+        }
+    }
+
+    // ── Import Panel ──────────────────────────────────────────────────────
+    function renderImportPanel() {
+        document.getElementById("panel-import").innerHTML = `
+            <div id="import-status"></div>
+            <p style="font-size:12px; color:#666; margin-bottom:16px;">Paste a markdown table spec to create a report record, or copy the template structure to give to an AI so it can generate one for you.</p>
+
+            <div class="btn-row" style="margin-bottom:20px;">
+                <button class="btn btn-secondary" onclick="copySpecStructure()">📋 Copy Spec Structure (for AI)</button>
+            </div>
+
+            <div class="form-group">
+                <label>Paste Report Spec (markdown table)</label>
+                <textarea id="import-spec" style="min-height:200px; font-family: 'SF Mono', 'Fira Code', monospace; font-size:11px;" placeholder="| Field | Value |
+|-------|-------|
+| Report_Name | My Report |
+| Description | What it does |
+| Link_Table | Contacts |
+| Data_Tables | Contacts,Deals |
+| Filter_Mode | all |
+| Filters | |
+| Report_Requirements | KPI cards, bar chart, table... |"></textarea>
+                <div class="hint">Accepts the | Field | Value | table format. Backtick-wrapped JSON is auto-unwrapped.</div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="importSpec()">📥 Import & Create Report</button>
+                <button class="btn" onclick="previewImport()">👁 Preview Parse</button>
+            </div>
+
+            <div id="import-preview" style="margin-top:16px; display:none;">
+                <label style="font-size:11px; font-weight:600; color:#555; text-transform:uppercase; margin-bottom:8px; display:block;">Parsed Fields</label>
+                <div id="import-preview-content" style="background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:12px; font-size:11px;"></div>
+            </div>
+        `;
+    }
+
+    function parseSpecTable(text) {
+        const lines = text.trim().split("\n").filter(l => l.trim().startsWith("|"));
+        if (lines.length < 2) return null;
+        const result = {};
+        // Skip header and separator rows
+        const dataLines = lines.filter(l => !l.match(/^\|\s*[-:]+/));
+        // First line is header, rest are data
+        const rows = dataLines.slice(1);
+        rows.forEach(line => {
+            const cells = line.split("|").map(c => c.trim()).filter(Boolean);
+            if (cells.length >= 2) {
+                let field = cells[0].trim();
+                let value = cells.slice(1).join("|").trim(); // rejoin in case value contains pipes
+                // Unwrap backticks
+                value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
+                result[field] = value;
+            }
+        });
+        return Object.keys(result).length > 0 ? result : null;
+    }
+
+    const FIELD_MAP = {
+        "Report_Name": "Report_Name", "Report Name": "Report_Name", "Name": "Report_Name",
+        "Description": "Description",
+        "Link_Table": "Link_Table", "Link Table": "Link_Table",
+        "Data_Tables": "Data_Tables", "Data Tables": "Data_Tables",
+        "Filter_Mode": "Filter_Mode", "Filter Mode": "Filter_Mode", "Mode": "Filter_Mode",
+        "Output": "Output",
+        "Template_HTML": "Template_HTML", "Template HTML": "Template_HTML", "Template": "Template_HTML",
+        "Filters": "Filters",
+        "Report_Requirements": "Report_Requirements", "Report Requirements": "Report_Requirements", "Requirements": "Report_Requirements"
+    };
+
+    function normalizeSpec(parsed) {
+        const record = {};
+        for (const [key, value] of Object.entries(parsed)) {
+            const mapped = FIELD_MAP[key];
+            if (mapped) record[mapped] = value;
+        }
+        return record;
+    }
+
+    window.previewImport = () => {
+        const text = document.getElementById("import-spec").value;
+        const parsed = parseSpecTable(text);
+        if (!parsed) {
+            showImportStatus("Could not parse. Ensure it's a | Field | Value | markdown table.", "error");
+            return;
+        }
+        const record = normalizeSpec(parsed);
+        let html = "<table class='schema-table'><tr><th>Column</th><th>Value</th></tr>";
+        for (const [k, v] of Object.entries(record)) {
+            const display = v.length > 80 ? v.slice(0, 80) + "..." : v;
+            html += "<tr><td><code>" + k + "</code></td><td>" + display.replace(/&/g, "&amp;").replace(/[<]/g, "&lt;").replace(/[>]/g, "&gt;") + "</td></tr>";
+        }
+        html += "</table>";
+        if (!record.Report_Name) html += "<p style='color:#e53935; margin-top:8px;'>⚠️ Missing Report_Name</p>";
+        document.getElementById("import-preview-content").innerHTML = html;
+        document.getElementById("import-preview").style.display = "block";
+    };
+
+    window.importSpec = async () => {
+        const text = document.getElementById("import-spec").value;
+        const parsed = parseSpecTable(text);
+        if (!parsed) { showImportStatus("Could not parse the markdown table.", "error"); return; }
+        const record = normalizeSpec(parsed);
+        if (!record.Report_Name) { showImportStatus("Report_Name is required.", "error"); return; }
+
+        try {
+            const fields = {
+                Report_Name: record.Report_Name || "",
+                Description: record.Description || "",
+                Link_Table: record.Link_Table || "",
+                Data_Tables: record.Data_Tables || "",
+                Filter_Mode: record.Filter_Mode || "all",
+                Output: record.Output || "widget",
+                Template_HTML: record.Template_HTML || "",
+                Filters: record.Filters || "",
+                Report_Requirements: record.Report_Requirements || "",
+                Active: true
+            };
+            await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
+
+            // Refresh reports
+            reports = await fetchTable(REPORTS_TABLE);
+            reports = reports.filter(r => r.Active === true);
+
+            showImportStatus('✅ "' + record.Report_Name + '" created in ' + REPORTS_TABLE + '. Switch to Edit Existing tab to generate the AI prompt.', "success");
+            document.getElementById("import-spec").value = "";
+            document.getElementById("import-preview").style.display = "none";
+        } catch(e) {
+            showImportStatus("Import failed: " + e.message, "error");
+        }
+    };
+
+    window.copySpecStructure = () => {
+        const tableList = Object.keys(schema).join(", ");
+        let schemaText = "";
+        for (const [tableName, tableInfo] of Object.entries(schema)) {
+            schemaText += "\nTable: " + tableName + "\nColumns: " + tableInfo.columns.map(c => c.name + " (" + c.type + ")").join(", ") + "\n";
+        }
+
+        const structure = 'You are helping me define a report specification for a Grist spreadsheet reporting system.\n\nGenerate a report spec in this EXACT markdown table format:\n\n| Field | Value |\n|-------|-------|\n| Report_Name | (descriptive name) |\n| Description | (one-line summary) |\n| Link_Table | (which table page this report appears on) |\n| Data_Tables | (comma-separated list of tables the report needs) |\n| Filter_Mode | (one of: all, record, filtered) |\n| Output | (one of: widget, print) |\n| Filters | (JSON array of filter definitions, or empty) |\n| Report_Requirements | (detailed description of what the report should show — KPIs, charts, tables, layout, styling) |\n\nFILTER MODES:\n- "all" — shows all data, no filter popup\n- "record" — shows data for the currently selected record (linked widget)\n- "filtered" — shows a filter popup before rendering\n\nFILTER TYPES (for Filter_Mode "filtered"):\n- Choice: {"field":"FieldName","label":"Display Label","type":"choice","table":"TableName"}\n- Date range: {"field":"FieldName","label":"Display Label","type":"date-range","table":"TableName"}\n- Number range: {"field":"FieldName","label":"Display Label","type":"number-range","table":"TableName"}\n- Text search: {"field":"FieldName","label":"Display Label","type":"text","table":"TableName"}\n- Boolean: {"field":"FieldName","label":"Display Label","type":"boolean","table":"TableName"}\n\nAVAILABLE FEATURES (mention in Report_Requirements if needed):\n- KPI cards (big number + label)\n- Charts: bar, line, pie, doughnut, radar, polarArea (via data attributes)\n- Maps with clustering or heatmap (requires Latitude/Longitude columns)\n- QR codes, barcodes\n- Progress bars, star ratings, colour-coded badges\n- Grouped tables, sorted tables\n- Multi-column layouts, mailing labels\n- Print page breaks\n\nDATABASE SCHEMA:\nAvailable tables: ' + tableList + '\n' + schemaText + '\nOUTPUT RULES:\n- Output ONLY the markdown table — no explanation, no commentary.\n- Wrap JSON values in backticks.\n- Report_Requirements should be detailed enough for a designer to build the template (mention specific fields, chart types, grouping, colour schemes).\n';
+
+        navigator.clipboard.writeText(structure).then(() => {
+            showImportStatus("Spec structure copied to clipboard! Paste it into your AI chat.", "success");
+        });
+    };
+
+    function showImportStatus(msg, type) {
+        const area = document.getElementById("import-status");
+        if (area) {
+            area.innerHTML = '<div class="status status-' + type + '">' + msg + '</div>';
+            setTimeout(() => { area.innerHTML = ""; }, 8000);
         }
     }
 
