@@ -3,96 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grist Report Builder</title>
+    <title>Grist Report Writer</title>
+    <!-- Grist Plugin API -->
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <!-- Template engine -->
     <script src="https://cdn.jsdelivr.net/npm/handlebars@4.7.8/dist/handlebars.min.js"></script>
+    <!-- Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <!-- Maps -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+    <!-- QR Codes -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <!-- Barcodes -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <!-- Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Screenshot for print -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 16px; color: #333; background: #f8f9fa; }
-
-        .builder { max-width: 800px; margin: 0 auto; }
-        .builder h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #264653; }
-        .builder .subtitle { font-size: 12px; color: #888; margin-bottom: 20px; }
-
-        /* Tabs */
-        .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #eee; }
-        .tab { padding: 10px 20px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; }
-        .tab.active { color: #16b378; border-bottom-color: #16b378; }
-        .tab:hover { color: #333; }
-
-        /* Panels */
-        .panel { display: none; }
-        .panel.active { display: block; }
-
-        /* Form elements */
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; }
-        .form-group textarea { min-height: 100px; resize: vertical; }
-        .form-group .hint { font-size: 10px; color: #aaa; margin-top: 4px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-        /* Prompt output */
-        .prompt-box { background: #1a1a2e; color: #e0e0e0; border-radius: 8px; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto; margin-bottom: 12px; }
-        .template-box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; min-height: 200px; resize: vertical; width: 100%; }
-
-        /* Buttons */
-        .btn { padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-        .btn:hover { background: #f0f0f0; }
-        .btn-primary { background: #16b378; color: #fff; border-color: #16b378; }
-        .btn-primary:hover { background: #12956a; }
-        .btn-secondary { background: #264653; color: #fff; border-color: #264653; }
-        .btn-secondary:hover { background: #1a3540; }
-        .btn-danger { background: #fff; color: #e53935; border-color: #e53935; }
-        .btn-danger:hover { background: #fef0f0; }
-        .btn-row { display: flex; gap: 8px; margin-top: 16px; }
-
-        /* Schema display */
-        .schema-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
-        .schema-table th { background: #264653; color: #fff; padding: 6px 10px; text-align: left; }
-        .schema-table td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; }
-        .schema-table tr:hover td { background: #f8f8f8; }
-
-        /* Preview */
-        .preview-frame { border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fff; min-height: 200px; overflow: auto; }
-
-        /* Status messages */
-        .status { padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; }
-        .status-success { background: #e1fede; color: #16b378; }
-        .status-error { background: #fef0f0; color: #e53935; }
-
-        /* Report list for editing */
-        .report-list { list-style: none; }
-        .report-list li { padding: 10px 14px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .report-list li:hover { border-color: #16b378; background: #f8fdf8; }
-        .report-list .name { font-weight: 600; font-size: 13px; }
-        .report-list .meta { font-size: 11px; color: #888; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 16px; color: #333; background: #fff; }
+        .report-picker { max-width: 640px; margin: 24px auto; }
+        .report-picker h2 { font-size: 18px; margin-bottom: 16px; color: #555; }
+        .table-group { margin-bottom: 20px; }
+        .table-group-title { font-size: 12px; font-weight: 600; color: #16b378; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e8e8e8; }
+        .report-card { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+        .report-card:hover { border-color: #16b378; box-shadow: 0 2px 8px rgba(22,179,120,0.12); }
+        .report-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+        .report-card p { font-size: 11px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+        .report-card .mode-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; background: #f0f0f0; color: #555; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+        .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+        .report-toolbar button { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px; }
+        .report-toolbar button:hover { background: #f5f5f5; }
+        .report-toolbar .btn-print { background: #16b378; color: #fff; border-color: #16b378; }
+        .report-toolbar .btn-print:hover { background: #12956a; }
+        .report-toolbar .btn-excel { background: #264653; color: #fff; border-color: #264653; }
+        .report-toolbar .btn-excel:hover { background: #1a3540; }
+        .report-toolbar h3 { font-size: 14px; flex: 1; }
+        .report-loading { text-align: center; padding: 40px; color: #999; }
+        .report-error { text-align: center; padding: 40px; color: #e53935; font-size: 13px; }
+        .filter-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+        .filter-dialog { background: #fff; border-radius: 12px; padding: 24px; width: 90%; max-width: 480px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .filter-dialog h2 { font-size: 16px; margin-bottom: 16px; color: #333; }
+        .filter-group { margin-bottom: 16px; }
+        .filter-group label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 6px; }
+        .filter-choices { display: flex; flex-wrap: wrap; gap: 4px; max-height: 120px; overflow-y: auto; padding: 4px; border: 1px solid #eee; border-radius: 6px; }
+        .filter-choice { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #f8f8f8; cursor: pointer; user-select: none; }
+        .filter-choice input { margin: 0; }
+        .filter-choice:hover { background: #e8f5e9; }
+        .filter-date-range, .filter-number-range { display: flex; gap: 8px; align-items: center; }
+        .filter-date-range input, .filter-number-range input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; width: 140px; }
+        .filter-text input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; width: 100%; }
+        .filter-boolean { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+        .filter-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
+        .filter-actions button { padding: 8px 20px; border-radius: 6px; border: 1px solid #ddd; font-size: 12px; cursor: pointer; }
+        .filter-actions .btn-generate { background: #16b378; color: #fff; border-color: #16b378; font-weight: 600; }
+        .filter-actions .btn-generate:hover { background: #12956a; }
+        @media print { .report-toolbar { display: none !important; } body { padding: 0; } }
     </style>
 </head>
 <body>
-<div class="builder">
-    <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance</div>
-
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('create')">Create New</div>
-        <div class="tab" onclick="switchTab('edit')">Edit Existing</div>
-        <div class="tab" onclick="switchTab('schema')">Schema Reference</div>
-        <div class="tab" onclick="switchTab('help')">Help & Features</div>
-    </div>
-
-    <div id="panel-create" class="panel active"></div>
-    <div id="panel-edit" class="panel"></div>
-    <div id="panel-schema" class="panel"></div>
-    <div id="panel-help" class="panel"></div>
-</div>
-
+<div id="app"><div class="report-loading">Connecting to Grist...</div></div>
 <script>
 (async function() {
     "use strict";
-
     const REPORTS_TABLE = "SysReports";
+    const app = document.getElementById("app");
 
     // ── Grist Plugin API ──────────────────────────────────────────────────
     grist.ready({ requiredAccess: "full", columns: [] });
@@ -111,516 +88,358 @@
         return rows;
     }
 
-    async function getSchema() {
-        const tables = await fetchTable("_grist_Tables");
-        const columns = await fetchTable("_grist_Tables_column");
-        const schema = {};
-        tables.forEach(t => {
-            if (t.tableId && !t.tableId.startsWith("_grist") && !t.tableId.startsWith("GristHidden")) {
-                schema[t.tableId] = { id: t.id, columns: [] };
-            }
-        });
-        columns.forEach(c => {
-            const table = tables.find(t => t.id === c.parentId);
-            if (table && schema[table.tableId] && c.colId && !c.colId.startsWith("gristHelper")) {
-                schema[table.tableId].columns.push({ name: c.colId, type: c.type, label: c.label || c.colId });
-            }
-        });
-        return schema;
+    async function resolveAssets(attachmentIds) {
+        const assetMap = {};
+        if (!attachmentIds || !Array.isArray(attachmentIds)) return assetMap;
+        const ids = attachmentIds.filter(id => typeof id === "number");
+        for (const attId of ids) {
+            try {
+                const meta = await grist.docApi.getAttachment(attId);
+                const url = await grist.docApi.getAttachmentUrl(attId);
+                assetMap[meta.fileName || `attachment_${attId}`] = url;
+            } catch(e) { console.warn(`Asset ${attId}:`, e); }
+        }
+        return assetMap;
     }
 
-    let schema = {};
-    let reports = [];
-
-    // ── Tab switching ────────────────────────────────────────────────────
-    window.switchTab = (tab) => {
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        // Reset first tab label
-        document.querySelector('.tab[onclick*="create"]').textContent = "Create New";
-        document.querySelector(`.tab[onclick*="${tab}"]`).classList.add("active");
-        document.getElementById(`panel-${tab}`).classList.add("active");
-        if (tab === "create") renderCreatePanel();
-        if (tab === "edit") renderEditPanel();
-        if (tab === "schema") renderSchemaPanel();
-        if (tab === "help") renderHelpPanel();
-    };
-
-    // ── Create Panel ──────────────────────────────────────────────────────
-    function renderCreatePanel(existingReport) {
-        const tableOptions = Object.keys(schema).map(t => `<option value="${t}">${t}</option>`).join("");
-        const isEdit = !!existingReport;
-        const r = existingReport || {};
-
-        document.getElementById("panel-create").innerHTML = `
-            <div id="status-area"></div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Report Name</label>
-                    <input type="text" id="rpt-name" value="${r.Report_Name || ""}" placeholder="e.g. Contact Activity Dashboard">
-                </div>
-                <div class="form-group">
-                    <label>Filter Mode</label>
-                    <select id="rpt-mode">
-                        <option value="all" ${r.Filter_Mode === "all" ? "selected" : ""}>All (no filter)</option>
-                        <option value="record" ${r.Filter_Mode === "record" ? "selected" : ""}>Record (selected record)</option>
-                        <option value="filtered" ${r.Filter_Mode === "filtered" ? "selected" : ""}>Filtered (popup)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Link Table (which page it appears on)</label>
-                    <select id="rpt-link"><option value="">-- Select --</option>${tableOptions}</select>
-                </div>
-                <div class="form-group">
-                    <label>Data Tables (comma-separated)</label>
-                    <input type="text" id="rpt-data" value="${r.Data_Tables || ""}" placeholder="e.g. Contacts,OrganisationContacts">
-                    <div class="hint">All tables the report needs data from</div>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Description</label>
-                <input type="text" id="rpt-desc" value="${r.Description || ""}" placeholder="Brief description of what this report shows">
-            </div>
-            <div class="form-group">
-                <label>What do you want the report to show? (for AI prompt)</label>
-                <textarea id="rpt-request" placeholder="e.g. A dashboard with KPI cards showing total contacts, active vs inactive. Bar chart of contacts by country. Table listing all contacts with name, email, status, and last updated date. Use a dark header theme.">${r._request || ""}</textarea>
-            </div>
-
-            <div class="btn-row">
-                <button class="btn btn-secondary" onclick="generatePrompt()">📋 Generate AI Prompt</button>
-                ${isEdit ? `<button class="btn btn-danger" onclick="switchTab('edit')">Cancel Edit</button>` : ""}
-            </div>
-
-            <div id="prompt-output" style="margin-top: 20px; display: none;">
-                <div class="form-group">
-                    <label>AI Prompt (copy this to ChatGPT/Claude)</label>
-                    <div class="prompt-box" id="prompt-text"></div>
-                    <div class="btn-row">
-                        <button class="btn" onclick="copyPrompt()">📋 Copy to Clipboard</button>
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-top: 24px;">
-                <div class="form-group">
-                    <label>Template HTML (paste AI output here)</label>
-                    <textarea class="template-box" id="rpt-template" placeholder="Paste the HTML template from the AI here...">${r.Template_HTML || ""}</textarea>
-                </div>
-                <div class="form-group">
-                    <label>Filters JSON (optional, for filtered mode)</label>
-                    <textarea id="rpt-filters" style="min-height: 60px; font-family: monospace; font-size: 11px;" placeholder='[{"field":"Status","label":"Status","type":"choice","table":"Contacts"}]'>${r.Filters || ""}</textarea>
-                </div>
-                <div class="btn-row">
-                    <button class="btn btn-primary" onclick="previewReport()">👁 Preview</button>
-                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"})">💾 ${isEdit ? "Update" : "Save"} Report</button>
-                </div>
-            </div>
-
-            <div id="preview-area" style="margin-top: 20px; display: none;">
-                <label style="font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; margin-bottom: 8px; display: block;">Preview</label>
-                <div class="preview-frame" id="preview-frame"></div>
-            </div>
-        `;
-
-        if (r.Link_Table) document.getElementById("rpt-link").value = r.Link_Table;
+    function injectAssets(container, assetMap) {
+        container.querySelectorAll("[data-asset]").forEach(el => {
+            const fn = el.dataset.asset;
+            if (assetMap[fn]) {
+                if (el.tagName === "IMG") el.src = assetMap[fn];
+                else el.style.backgroundImage = `url(${assetMap[fn]})`;
+            }
+        });
     }
 
-    // ── Prompt Generator ────────────────────────────────────────────────────
-    window.generatePrompt = () => {
-        const linkTable = document.getElementById("rpt-link").value;
-        const dataTables = document.getElementById("rpt-data").value || linkTable;
-        const request = document.getElementById("rpt-request").value;
-        const mode = document.getElementById("rpt-mode").value;
+    // ── Handlebars helpers ─────────────────────────────────────────────────
+    const H = Handlebars;
+    // Comparison
+    H.registerHelper("eq", (a, b) => a === b);
+    H.registerHelper("neq", (a, b) => a !== b);
+    H.registerHelper("gt", (a, b) => a > b);
+    H.registerHelper("lt", (a, b) => a < b);
+    H.registerHelper("gte", (a, b) => a >= b);
+    H.registerHelper("lte", (a, b) => a <= b);
+    H.registerHelper("and", (a, b) => a && b);
+    H.registerHelper("or", (a, b) => a || b);
+    H.registerHelper("not", (a) => !a);
+    // Math
+    H.registerHelper("add", (a, b) => Number(a) + Number(b));
+    H.registerHelper("subtract", (a, b) => Number(a) - Number(b));
+    H.registerHelper("multiply", (a, b) => Number(a) * Number(b));
+    H.registerHelper("divide", (a, b) => b !== 0 ? Number(a) / Number(b) : 0);
+    H.registerHelper("percent", (a, b) => b !== 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%");
+    H.registerHelper("round", (n, d) => Number(n).toFixed(typeof d === "number" ? d : 0));
+    // Aggregation
+    H.registerHelper("count", (arr) => Array.isArray(arr) ? arr.length : 0);
+    H.registerHelper("sum", function(arr, key) { if (!Array.isArray(arr)) return 0; return arr.reduce((s, i) => s + (Number(i[key]) || 0), 0); });
+    H.registerHelper("avg", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return (arr.reduce((s, i) => s + (Number(i[key]) || 0), 0) / arr.length).toFixed(1); });
+    H.registerHelper("max", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.max(...arr.map(i => Number(i[key]) || 0)); });
+    H.registerHelper("min", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.min(...arr.map(i => Number(i[key]) || 0)); });
+    H.registerHelper("unique", function(arr, key) { if (!Array.isArray(arr)) return []; return [...new Set(arr.map(i => i[key]).filter(Boolean))]; });
+    // Grouping & filtering
+    H.registerHelper("groupBy", function(arr, key, options) { if (!Array.isArray(arr)) return ""; const g = {}; arr.forEach(i => { const k = i[key] || "(blank)"; if (!g[k]) g[k] = []; g[k].push(i); }); let o = ""; for (const [k, items] of Object.entries(g)) o += options.fn({ key: k, items, count: items.length }); return o; });
+    H.registerHelper("filterBy", function(arr, key, value, options) { if (!Array.isArray(arr)) return ""; const f = arr.filter(i => i[key] === value); return options.fn({ items: f, count: f.length }); });
+    H.registerHelper("sortBy", function(arr, key, dir) { if (!Array.isArray(arr)) return []; const s = [...arr].sort((a, b) => a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0); return dir === "desc" ? s.reverse() : s; });
+    // Dates
+    H.registerHelper("formatDate", (val) => { if (!val) return ""; return new Date(val * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); });
+    H.registerHelper("formatDateTime", (val) => { if (!val) return ""; const d = new Date(val * 1000); return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); });
+    H.registerHelper("now", () => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }));
+    H.registerHelper("year", (val) => val ? new Date(val * 1000).getFullYear() : new Date().getFullYear());
+    H.registerHelper("month", (val) => val ? new Date(val * 1000).getMonth() : new Date().getMonth());
+    H.registerHelper("dayOfWeek", (val) => { const d = new Date(val * 1000); return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]; });
+    // Strings
+    H.registerHelper("uppercase", (s) => String(s || "").toUpperCase());
+    H.registerHelper("lowercase", (s) => String(s || "").toLowerCase());
+    H.registerHelper("truncate", (s, len) => { const str = String(s || ""); return str.length > len ? str.slice(0, len) + "..." : str; });
+    H.registerHelper("replace", (s, find, rep) => String(s || "").replace(new RegExp(find, "g"), rep));
+    H.registerHelper("json", (obj) => JSON.stringify(obj));
+    // Layout
+    H.registerHelper("pageBreak", () => new H.SafeString('<div style="page-break-after: always;"></div>'));
+    H.registerHelper("columns", function(count, options) { return new H.SafeString(`<div style="column-count:${count}; column-gap:16px;">${options.fn(this)}</div>`); });
+    // Calendar helpers
+    H.registerHelper("monthGrid", function(year, month, options) {
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const weeks = [];
+        let day = 1 - firstDay;
+        for (let w = 0; w < 6; w++) {
+            const week = [];
+            for (let d = 0; d < 7; d++, day++) {
+                week.push(day > 0 && day <= daysInMonth ? day : null);
+            }
+            if (week.some(d => d !== null)) weeks.push(week);
+        }
+        let out = "";
+        weeks.forEach(week => { out += options.fn({ days: week }); });
+        return out;
+    });
+    H.registerHelper("monthName", (m) => ["January","February","March","April","May","June","July","August","September","October","November","December"][m] || "");
 
-        const tables = dataTables.split(",").map(t => t.trim()).filter(Boolean);
-        let schemaText = "";
-        tables.forEach(t => {
-            if (schema[t]) {
-                schemaText += `\nTable: ${t}\nColumns:\n`;
-                schema[t].columns.forEach(c => {
-                    schemaText += `  - ${c.name} (${c.type})${c.label !== c.name ? ` [label: "${c.label}"]` : ""}\n`;
+    // ── Rendering: Charts ──────────────────────────────────────────────────
+    const COLOURS = ["#16b378","#e63946","#457b9d","#f4a261","#6a4c93","#2a9d8f","#e76f51","#264653","#84a98c","#d62828","#003049","#fcbf49"];
+
+    function renderCharts(container, data) {
+        container.querySelectorAll("canvas[data-chart]").forEach(canvas => {
+            try { new Chart(canvas, JSON.parse(canvas.dataset.chart)); } catch(e) { console.error("Chart:", e); }
+        });
+        container.querySelectorAll("canvas[data-chart-type]").forEach(canvas => {
+            try {
+                const type = canvas.dataset.chartType, tableData = data[canvas.dataset.chartTable];
+                const groupField = canvas.dataset.chartGroup, labelField = canvas.dataset.chartLabel;
+                const valueField = canvas.dataset.chartValue, title = canvas.dataset.chartTitle || "";
+                if (!Array.isArray(tableData)) return;
+                let labels, values;
+                if (groupField) {
+                    const g = {}; tableData.forEach(r => { const k = r[groupField] || "(blank)"; g[k] = (g[k] || 0) + (valueField ? (Number(r[valueField]) || 0) : 1); });
+                    labels = Object.keys(g); values = Object.values(g);
+                } else { labels = tableData.map(r => r[labelField] || ""); values = tableData.map(r => Number(r[valueField]) || 0); }
+                new Chart(canvas, { type, data: { labels, datasets: [{ label: title, data: values, backgroundColor: type === "line" ? COLOURS[0] : labels.map((_, i) => COLOURS[i % COLOURS.length]), borderColor: type === "line" ? COLOURS[0] : undefined, borderWidth: type === "line" ? 2 : 1, fill: false }] }, options: { responsive: true, plugins: { title: { display: !!title, text: title }, legend: { display: type === "pie" || type === "doughnut" } }, scales: (type === "bar" || type === "line") ? { y: { beginAtZero: true } } : undefined } });
+            } catch(e) { console.error("Declarative chart:", e); }
+        });
+    }
+
+    // ── Rendering: Maps ─────────────────────────────────────────────────────
+    function renderMaps(container, data) {
+        container.querySelectorAll("[data-map]").forEach(el => {
+            try {
+                const tableData = data[el.dataset.mapTable];
+                const latField = el.dataset.mapLat || "Latitude";
+                const lngField = el.dataset.mapLng || "Longitude";
+                const labelField = el.dataset.mapLabel || "";
+                const colourField = el.dataset.mapColour || "";
+                if (!Array.isArray(tableData)) return;
+
+                const points = tableData.filter(r => r[latField] && r[lngField] && r[latField] !== 0);
+                if (points.length === 0) { el.innerHTML = "<p style='color:#999;text-align:center;padding:20px;'>No coordinates available</p>"; return; }
+
+                el.style.minHeight = el.style.height || "400px";
+                const map = L.map(el).setView([points[0][latField], points[0][lngField]], 3);
+                L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+
+                const colourMap = {};
+                let colourIdx = 0;
+                points.forEach(r => {
+                    const lat = Number(r[latField]), lng = Number(r[lngField]);
+                    if (isNaN(lat) || isNaN(lng)) return;
+                    let colour = COLOURS[0];
+                    if (colourField && r[colourField]) {
+                        if (!colourMap[r[colourField]]) colourMap[r[colourField]] = COLOURS[colourIdx++ % COLOURS.length];
+                        colour = colourMap[r[colourField]];
+                    }
+                    const marker = L.circleMarker([lat, lng], { radius: 6, fillColor: colour, color: "#fff", weight: 1, fillOpacity: 0.8 }).addTo(map);
+                    if (labelField && r[labelField]) marker.bindPopup(String(r[labelField]));
                 });
-            }
+
+                // Fit bounds
+                const bounds = L.latLngBounds(points.map(r => [r[latField], r[lngField]]));
+                map.fitBounds(bounds, { padding: [20, 20] });
+            } catch(e) { console.error("Map:", e); }
         });
+    }
 
-        const prompt = `You are a report template designer for a Grist spreadsheet reporting system.
-
-Generate a complete HTML template (HTML + inline CSS + Handlebars placeholders) for the following report.
-
-RULES:
-- Output ONLY the HTML. No markdown, no code fences, no explanation.
-- Start with <style> and end with the final </div>.
-- Use Handlebars syntax for data binding.
-- Data is passed as an object where each table is a key containing an array of row objects.
-  Example: {{#each ${tables[0]}}}...{{/${tables[0]}}}
-- Available Handlebars helpers:
-  {{#each array}} {{/each}} — loop
-  {{#if condition}} {{/if}} — conditional
-  {{#groupBy array "field"}} {{key}} {{items}} {{count}} {{/groupBy}} — group rows
-  {{#filterBy array "field" "value"}} {{items}} {{count}} {{/filterBy}} — filter rows
-  {{count array}} — array length
-  {{sum array "field"}} — sum numeric field
-  {{avg array "field"}} — average
-  {{percent numerator denominator}} — percentage string
-  {{formatDate field}} — format Grist date (epoch seconds)
-  {{now}} — current date string
-  {{eq a b}}, {{gt a b}}, {{lt a b}} — comparisons (use with #if)
-  {{uppercase str}}, {{truncate str length}}
-  {{formatDateTime field}} — date + time
-  {{year field}}, {{month field}}, {{dayOfWeek field}} — date parts
-  {{monthName 5}} — "June"
-  {{replace str "find" "replacement"}} — string replace
-- For charts, use: <canvas data-chart-type="TYPE" data-chart-table="TableName" data-chart-group="FieldName" data-chart-title="Title">
-  Available chart types: bar, line, pie, doughnut, radar, polarArea, scatter, bubble
-  For complex charts (multi-dataset, radar with custom axes), use full JSON config:
-  <canvas data-chart='{"type":"radar","data":{"labels":[...],"datasets":[...]},"options":{...}}'>
-- For maps: <div data-map data-map-table="TableName" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="Name" data-map-colour="Status" style="height:400px"></div>
-- For QR codes: <div data-qr="{{field_value}}" data-qr-size="128"></div>
-- For barcodes: <div data-barcode="{{field_value}}" data-barcode-format="CODE128"></div>
-- For assets/logos: <img data-asset="filename.png">
-- For page breaks (multi-page print): {{pageBreak}}
-- For multi-column layout: {{#columns 2}}...{{/columns}}
-- For calendar grids: {{#monthGrid year month}}{{#each days}}...{{/each}}{{/monthGrid}}
-- Use professional styling: clean typography, subtle borders, colour-coded badges.
-- Include @media print rules for clean PDF output.
-- Make it look like a Power BI dashboard: KPI cards, charts, clean tables.
-${mode === "record" ? "- This is a SINGLE RECORD report. Data will contain only one row in the primary table. Show all fields in a detail layout." : ""}
-${mode === "filtered" ? "- This report will be pre-filtered before rendering. Show summary stats and charts for the filtered dataset." : ""}
-
-DATABASE SCHEMA:
-${schemaText}
-
-REPORT REQUEST:
-${request}
-
-Generate the template now.`;
-
-        document.getElementById("prompt-text").textContent = prompt;
-        document.getElementById("prompt-output").style.display = "block";
-    };
-
-    window.copyPrompt = () => {
-        const text = document.getElementById("prompt-text").textContent;
-        navigator.clipboard.writeText(text).then(() => {
-            showStatus("Prompt copied to clipboard!", "success");
+    // ── Rendering: QR Codes ─────────────────────────────────────────────────
+    function renderQRCodes(container) {
+        container.querySelectorAll("[data-qr]").forEach(el => {
+            try {
+                const value = el.dataset.qr;
+                const size = parseInt(el.dataset.qrSize) || 128;
+                if (!value) return;
+                const canvas = document.createElement("canvas");
+                QRCode.toCanvas(canvas, value, { width: size, margin: 1 }, (err) => { if (!err) el.appendChild(canvas); });
+            } catch(e) { console.error("QR:", e); }
         });
-    };
+    }
 
-    // ── Preview ────────────────────────────────────────────────────────────
-    window.previewReport = async () => {
-        const templateHTML = document.getElementById("rpt-template").value;
-        const dataTables = (document.getElementById("rpt-data").value || document.getElementById("rpt-link").value).split(",").map(t => t.trim()).filter(Boolean);
+    // ── Rendering: Barcodes ─────────────────────────────────────────────────
+    function renderBarcodes(container) {
+        container.querySelectorAll("[data-barcode]").forEach(el => {
+            try {
+                const value = el.dataset.barcode;
+                const format = el.dataset.barcodeFormat || "CODE128";
+                if (!value) return;
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                el.appendChild(svg);
+                JsBarcode(svg, value, { format, height: 40, displayValue: true, fontSize: 12 });
+            } catch(e) { console.error("Barcode:", e); }
+        });
+    }
 
-        if (!templateHTML) { showStatus("Paste a template first", "error"); return; }
+    // ── Excel Export ─────────────────────────────────────────────────────────
+    function exportToExcel(container, reportName) {
+        const tables = container.querySelectorAll("table");
+        if (tables.length === 0) { alert("No tables found to export"); return; }
+        const wb = XLSX.utils.book_new();
+        tables.forEach((table, i) => {
+            const ws = XLSX.utils.table_to_sheet(table);
+            XLSX.utils.book_append_sheet(wb, ws, `Sheet${i + 1}`);
+        });
+        XLSX.writeFile(wb, `${reportName || "report"}.xlsx`);
+    }
 
+    // ── Filter dialog ──────────────────────────────────────────────────────
+    function showFilterDialog(report, data) {
+        return new Promise((resolve) => {
+            let filters;
+            try { filters = JSON.parse(report.Filters || "[]"); } catch(e) { filters = []; }
+            if (filters.length === 0) { resolve({}); return; }
+            const choiceOptions = {};
+            filters.forEach(f => { if (f.type === "choice") { const td = data[f.table] || []; choiceOptions[f.field] = [...new Set(td.map(r => r[f.field]).filter(v => v != null && v !== ""))].sort(); } });
+
+            let html = `<div class="filter-overlay" id="filter-overlay"><div class="filter-dialog"><h2>${report.Report_Name} — Filters</h2>`;
+            filters.forEach((f, i) => {
+                html += `<div class="filter-group"><label>${f.label || f.field}</label>`;
+                if (f.type === "choice") { html += `<div class="filter-choices">`; (choiceOptions[f.field] || []).forEach(val => { html += `<label class="filter-choice"><input type="checkbox" data-filter="${i}" value="${val}" checked> ${val}</label>`; }); html += `</div>`; }
+                else if (f.type === "date-range") { html += `<div class="filter-date-range"><input type="date" data-filter="${i}" data-bound="from"> <span>to</span> <input type="date" data-filter="${i}" data-bound="to"></div>`; }
+                else if (f.type === "number-range") { html += `<div class="filter-number-range"><input type="number" data-filter="${i}" data-bound="from" placeholder="Min"> <span>to</span> <input type="number" data-filter="${i}" data-bound="to" placeholder="Max"></div>`; }
+                else if (f.type === "text") { html += `<div class="filter-text"><input type="text" data-filter="${i}" placeholder="Search..."></div>`; }
+                else if (f.type === "boolean") { html += `<div class="filter-boolean"><input type="checkbox" data-filter="${i}" checked> Only include matching</div>`; }
+                html += `</div>`;
+            });
+            html += `<div class="filter-actions"><button class="btn-cancel" id="filter-cancel">Cancel</button><button class="btn-generate" id="filter-generate">Generate Report</button></div></div></div>`;
+
+            const container = document.createElement("div"); container.innerHTML = html; document.body.appendChild(container);
+            document.getElementById("filter-cancel").onclick = () => { container.remove(); resolve(null); };
+            document.getElementById("filter-generate").onclick = () => {
+                const result = {};
+                filters.forEach((f, i) => {
+                    if (f.type === "choice") { const checked = [...container.querySelectorAll(`input[data-filter="${i}"]:checked`)].map(el => el.value); if (checked.length > 0 && checked.length < (choiceOptions[f.field] || []).length) { if (!result[f.table]) result[f.table] = []; result[f.table].push({ field: f.field, type: "choice", values: checked }); } }
+                    else if (f.type === "date-range") { const from = container.querySelector(`input[data-filter="${i}"][data-bound="from"]`).value; const to = container.querySelector(`input[data-filter="${i}"][data-bound="to"]`).value; if (from || to) { if (!result[f.table]) result[f.table] = []; result[f.table].push({ field: f.field, type: "date-range", from: from ? new Date(from).getTime() / 1000 : null, to: to ? new Date(to).getTime() / 1000 : null }); } }
+                    else if (f.type === "number-range") { const from = container.querySelector(`input[data-filter="${i}"][data-bound="from"]`).value; const to = container.querySelector(`input[data-filter="${i}"][data-bound="to"]`).value; if (from || to) { if (!result[f.table]) result[f.table] = []; result[f.table].push({ field: f.field, type: "number-range", from: from ? Number(from) : null, to: to ? Number(to) : null }); } }
+                    else if (f.type === "text") { const val = container.querySelector(`input[data-filter="${i}"]`).value.trim(); if (val) { if (!result[f.table]) result[f.table] = []; result[f.table].push({ field: f.field, type: "text", value: val.toLowerCase() }); } }
+                    else if (f.type === "boolean") { const checked = container.querySelector(`input[data-filter="${i}"]`).checked; if (!result[f.table]) result[f.table] = []; result[f.table].push({ field: f.field, type: "boolean", value: checked }); }
+                });
+                container.remove(); resolve(result);
+            };
+        });
+    }
+
+    function applyFilters(data, filterResult) {
+        if (!filterResult || Object.keys(filterResult).length === 0) return data;
+        const filtered = { ...data };
+        for (const [table, tableFilters] of Object.entries(filterResult)) {
+            if (!Array.isArray(filtered[table])) continue;
+            filtered[table] = filtered[table].filter(row => tableFilters.every(f => {
+                if (f.type === "choice") return f.values.includes(row[f.field]);
+                if (f.type === "date-range") { const v = row[f.field]; if (f.from && v < f.from) return false; if (f.to && v > f.to) return false; return true; }
+                if (f.type === "number-range") { const v = Number(row[f.field]); if (f.from != null && v < f.from) return false; if (f.to != null && v > f.to) return false; return true; }
+                if (f.type === "text") return String(row[f.field] || "").toLowerCase().includes(f.value);
+                if (f.type === "boolean") return !!row[f.field] === f.value;
+                return true;
+            }));
+        }
+        return filtered;
+    }
+
+    // ── Report renderer ────────────────────────────────────────────────────
+    async function renderReport(report, selectedRecord) {
+        app.innerHTML = `<div class="report-loading">Loading data...</div>`;
         try {
+            const mode = (report.Filter_Mode || "all").trim().toLowerCase();
+            const targets = report.Data_Tables ? report.Data_Tables.split(",").map(t => t.trim()) : [];
+            const primaryTable = report.Link_Table ? report.Link_Table.trim() : targets[0];
             const data = {};
-            await Promise.all(dataTables.map(async (table) => { data[table] = await fetchTable(table); }));
-            data._meta = { reportName: "Preview", generatedAt: new Date().toLocaleString("en-GB"), recordCounts: {} };
-            for (const [t, rows] of Object.entries(data)) { if (t !== "_meta") data._meta.recordCounts[t] = rows.length; }
+            await Promise.all(targets.map(async (table) => { data[table] = await fetchTable(table); }));
 
-            // Register helpers (same as report widget)
-            registerHelpers();
+            if (mode === "record") {
+                if (!selectedRecord || !selectedRecord.id) { app.innerHTML = `<div class="report-error">Select a record first to run this report.</div>`; return; }
+                if (primaryTable && data[primaryTable]) data[primaryTable] = data[primaryTable].filter(row => row.id === selectedRecord.id);
+                const selectedId = selectedRecord.id;
+                for (const table of targets.filter(t => t !== primaryTable)) {
+                    if (!data[table] || data[table].length === 0) continue;
+                    const refCols = Object.keys(data[table][0] || {}).filter(col => col === primaryTable || col === primaryTable.replace(/s$/, "") || col === primaryTable + "_ID" || col === "Contact" || col === "Organisation");
+                    if (refCols.length > 0) data[table] = data[table].filter(row => refCols.some(col => row[col] === selectedId));
+                }
+                data._selected = selectedRecord;
+            } else if (mode === "filtered") {
+                let filters; try { filters = JSON.parse(report.Filters || "[]"); } catch(e) { filters = []; }
+                if (filters.length > 0) { const fr = await showFilterDialog(report, data); if (fr === null) { showPicker(); return; } Object.assign(data, applyFilters(data, fr)); }
+            }
 
-            const template = Handlebars.compile(templateHTML);
+            data._meta = { reportName: report.Report_Name, generatedAt: new Date().toLocaleString("en-GB"), recordCounts: {} };
+            for (const [t, rows] of Object.entries(data)) { if (t !== "_meta" && t !== "_selected") data._meta.recordCounts[t] = Array.isArray(rows) ? rows.length : 0; }
+
+            let assetMap = {};
+            if (report.Assets) assetMap = await resolveAssets(report.Assets);
+
+            const template = H.compile(report.Template_HTML || "");
             const html = template(data);
 
-            const frame = document.getElementById("preview-frame");
-            frame.innerHTML = html;
-            document.getElementById("preview-area").style.display = "block";
+            const reportName = report.Report_Name || "Report";
+            app.innerHTML = `
+                <div class="report-toolbar">
+                    <button onclick="showPicker()">← Reports</button>
+                    <h3>${reportName}</h3>
+                    <button class="btn-print" onclick="window.print()">🖨 Print</button>
+                    <button class="btn-excel" onclick="exportToExcel(document.querySelector('.report-content'),'${reportName.replace(/'/g, "")}')">📊 Excel</button>
+                </div>
+                <div class="report-content">${html}</div>
+            `;
 
-            // Render charts in preview
-            frame.querySelectorAll("canvas[data-chart-type]").forEach(canvas => {
-                try {
-                    const type = canvas.dataset.chartType;
-                    const tableData = data[canvas.dataset.chartTable];
-                    const groupField = canvas.dataset.chartGroup;
-                    const title = canvas.dataset.chartTitle || "";
-                    if (!Array.isArray(tableData)) return;
-                    const groups = {};
-                    tableData.forEach(row => { const k = row[groupField] || "(blank)"; groups[k] = (groups[k] || 0) + 1; });
-                    const colours = ["#16b378","#e63946","#457b9d","#f4a261","#6a4c93","#2a9d8f","#e76f51","#264653"];
-                    new Chart(canvas, { type, data: { labels: Object.keys(groups), datasets: [{ data: Object.values(groups), backgroundColor: Object.keys(groups).map((_, i) => colours[i % colours.length]) }] }, options: { responsive: true, plugins: { title: { display: !!title, text: title }, legend: { display: type === "pie" || type === "doughnut" } } } });
-                } catch(e) { console.error("Preview chart error:", e); }
-            });
-
-            showStatus("Preview rendered successfully", "success");
+            const content = app.querySelector(".report-content");
+            injectAssets(content, assetMap);
+            renderCharts(content, data);
+            renderMaps(content, data);
+            renderQRCodes(content);
+            renderBarcodes(content);
         } catch(e) {
-            showStatus("Preview error: " + e.message, "error");
+            app.innerHTML = `<div class="report-error">Error: ${e.message}</div>`;
+            console.error("Report error:", e);
         }
-    };
-
-    function registerHelpers() {
-        const h = Handlebars;
-        if (h._buildersRegistered) return;
-        h._buildersRegistered = true;
-        h.registerHelper("eq", (a, b) => a === b);
-        h.registerHelper("neq", (a, b) => a !== b);
-        h.registerHelper("gt", (a, b) => a > b);
-        h.registerHelper("lt", (a, b) => a < b);
-        h.registerHelper("gte", (a, b) => a >= b);
-        h.registerHelper("lte", (a, b) => a <= b);
-        h.registerHelper("and", (a, b) => a && b);
-        h.registerHelper("or", (a, b) => a || b);
-        h.registerHelper("not", (a) => !a);
-        h.registerHelper("add", (a, b) => Number(a) + Number(b));
-        h.registerHelper("subtract", (a, b) => Number(a) - Number(b));
-        h.registerHelper("multiply", (a, b) => Number(a) * Number(b));
-        h.registerHelper("divide", (a, b) => b !== 0 ? Number(a) / Number(b) : 0);
-        h.registerHelper("percent", (a, b) => b !== 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%");
-        h.registerHelper("round", (n, d) => Number(n).toFixed(typeof d === "number" ? d : 0));
-        h.registerHelper("count", (arr) => Array.isArray(arr) ? arr.length : 0);
-        h.registerHelper("sum", function(arr, key) { if (!Array.isArray(arr)) return 0; return arr.reduce((s, i) => s + (Number(i[key]) || 0), 0); });
-        h.registerHelper("avg", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return (arr.reduce((s, i) => s + (Number(i[key]) || 0), 0) / arr.length).toFixed(1); });
-        h.registerHelper("max", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.max(...arr.map(i => Number(i[key]) || 0)); });
-        h.registerHelper("min", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.min(...arr.map(i => Number(i[key]) || 0)); });
-        h.registerHelper("unique", function(arr, key) { if (!Array.isArray(arr)) return []; return [...new Set(arr.map(i => i[key]).filter(Boolean))]; });
-        h.registerHelper("groupBy", function(arr, key, options) { if (!Array.isArray(arr)) return ""; const g = {}; arr.forEach(i => { const k = i[key] || "(blank)"; if (!g[k]) g[k] = []; g[k].push(i); }); let o = ""; for (const [k, items] of Object.entries(g)) o += options.fn({ key: k, items, count: items.length }); return o; });
-        h.registerHelper("filterBy", function(arr, key, value, options) { if (!Array.isArray(arr)) return ""; const f = arr.filter(i => i[key] === value); return options.fn({ items: f, count: f.length }); });
-        h.registerHelper("sortBy", function(arr, key, dir) { if (!Array.isArray(arr)) return []; const s = [...arr].sort((a, b) => a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0); return dir === "desc" ? s.reverse() : s; });
-        h.registerHelper("formatDate", (val) => { if (!val) return ""; return new Date(val * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); });
-        h.registerHelper("now", () => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }));
-        h.registerHelper("uppercase", (s) => String(s || "").toUpperCase());
-        h.registerHelper("lowercase", (s) => String(s || "").toLowerCase());
-        h.registerHelper("truncate", (s, len) => { const str = String(s || ""); return str.length > len ? str.slice(0, len) + "..." : str; });
     }
 
-    // ── Save Report ────────────────────────────────────────────────────────
-    window.saveReport = async (existingId) => {
-        const name = document.getElementById("rpt-name").value.trim();
-        const desc = document.getElementById("rpt-desc").value.trim();
-        const linkTable = document.getElementById("rpt-link").value;
-        const dataTables = document.getElementById("rpt-data").value.trim();
-        const mode = document.getElementById("rpt-mode").value;
-        const templateHTML = document.getElementById("rpt-template").value;
-        const filters = document.getElementById("rpt-filters").value.trim();
+    // ── Report picker ────────────────────────────────────────────────────────
+    let reports = [];
+    let linkedTableId = null;
+    let currentRecord = null;
 
-        if (!name) { showStatus("Report name is required", "error"); return; }
-        if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
+    function showPicker() {
+        const visible = linkedTableId ? reports.filter(r => (r.Link_Table || "").trim() === linkedTableId) : reports;
+        if (visible.length === 0) { app.innerHTML = `<div class="report-error">No reports available${linkedTableId ? ` for "${linkedTableId}"` : ""}.</div>`; return; }
+        if (visible.length === 1 && (visible[0].Filter_Mode || "all").trim() !== "record") { renderReport(visible[0], currentRecord); return; }
+        if (visible.length === 1 && currentRecord) { renderReport(visible[0], currentRecord); return; }
 
-        try {
-            if (existingId) {
-                // Update existing report
-                await grist.docApi.applyUserActions([
-                    ["UpdateRecord", REPORTS_TABLE, existingId, {
-                        Report_Name: name,
-                        Description: desc,
-                        Link_Table: linkTable,
-                        Data_Tables: dataTables,
-                        Filter_Mode: mode,
-                        Template_HTML: templateHTML,
-                        Filters: filters
-                    }]
-                ]);
-                showStatus(`Report "${name}" updated successfully!`, "success");
-            } else {
-                // Create new report
-                await grist.docApi.applyUserActions([
-                    ["AddRecord", REPORTS_TABLE, null, {
-                        Report_Name: name,
-                        Description: desc,
-                        Link_Table: linkTable,
-                        Data_Tables: dataTables,
-                        Filter_Mode: mode,
-                        Template_HTML: templateHTML,
-                        Filters: filters
-                    }]
-                ]);
-                showStatus(`Report "${name}" saved successfully!`, "success");
-            }
-            // Refresh reports list
-            reports = await fetchTable(REPORTS_TABLE);
-        } catch(e) {
-            showStatus("Save failed: " + e.message, "error");
-        }
-    };
+        const groups = {};
+        visible.forEach(r => { const t = (r.Link_Table || "Other").trim(); if (!groups[t]) groups[t] = []; groups[t].push(r); });
 
-    // ── Edit Panel ──────────────────────────────────────────────────────────
-    function renderEditPanel() {
-        if (reports.length === 0) {
-            document.getElementById("panel-edit").innerHTML = `<p style="color: #888; font-size: 13px;">No reports found in ${REPORTS_TABLE}.</p>`;
-            return;
-        }
-        let html = `<ul class="report-list">`;
-        reports.forEach(r => {
-            html += `<li onclick="editReport(${r.id})"><div><span class="name">${r.Report_Name || "Untitled"}</span><br><span class="meta">${r.Link_Table || ""} · ${r.Filter_Mode || "all"}</span></div><span class="meta">${r.Data_Tables || ""}</span></li>`;
-        });
-        html += `</ul>`;
-        document.getElementById("panel-edit").innerHTML = html;
-    }
-
-    window.editReport = (id) => {
-        const report = reports.find(r => r.id === id);
-        if (!report) return;
-        // Switch to create tab but relabel it as "Edit"
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        const createTab = document.querySelector('.tab[onclick*="create"]');
-        createTab.textContent = "Edit Report";
-        createTab.classList.add("active");
-        document.getElementById("panel-create").classList.add("active");
-        renderCreatePanel(report);
-    };
-
-    // ── Schema Panel ────────────────────────────────────────────────────────
-    function renderSchemaPanel() {
-        let html = "";
-        for (const [tableName, tableInfo] of Object.entries(schema)) {
-            html += `<h3 style="font-size: 13px; margin: 16px 0 8px; color: #264653;">${tableName}</h3>`;
-            html += `<table class="schema-table"><thead><tr><th>Column</th><th>Type</th><th>Label</th></tr></thead><tbody>`;
-            tableInfo.columns.forEach(c => {
-                html += `<tr><td><code>${c.name}</code></td><td>${c.type}</td><td>${c.label}</td></tr>`;
+        let html = `<div class="report-picker"><h2>Reports</h2>`;
+        for (const [table, items] of Object.entries(groups)) {
+            html += `<div class="table-group"><div class="table-group-title">${table}</div>`;
+            items.forEach(r => {
+                const idx = reports.indexOf(r);
+                const mode = (r.Filter_Mode || "all").trim().toLowerCase();
+                const needsRecord = mode === "record" && !currentRecord;
+                const disabled = needsRecord ? ' style="opacity:0.5;pointer-events:none;"' : '';
+                const modeLabel = mode === "record" ? "Record" : mode === "filtered" ? "Filtered" : "All";
+                html += `<div class="report-card"${disabled} onclick="selectReport(${idx})"><div><h3>${r.Report_Name || "Untitled"}</h3><p>${r.Description || ""}${needsRecord ? " — <em>Select a record first</em>" : ""}</p></div><span class="mode-badge">${modeLabel}</span></div>`;
             });
-            html += `</tbody></table>`;
+            html += `</div>`;
         }
-        document.getElementById("panel-schema").innerHTML = html || `<p style="color: #888;">Loading schema...</p>`;
+        html += `</div>`;
+        app.innerHTML = html;
     }
 
-    // ── Utilities ────────────────────────────────────────────────────────────
-    function showStatus(msg, type) {
-        const area = document.getElementById("status-area");
-        if (area) {
-            area.innerHTML = `<div class="status status-${type}">${msg}</div>`;
-            setTimeout(() => { area.innerHTML = ""; }, 5000);
-        }
-    }
-
-    // ── Help Panel ────────────────────────────────────────────────────────
-    function renderHelpPanel() {
-        document.getElementById("panel-help").innerHTML = `
-        <div style="font-size:12px; line-height:1.8; max-width:700px;">
-            <h3 style="font-size:16px; margin-bottom:12px; color:#264653;">Report Writer Features</h3>
-            <p style="color:#666; margin-bottom:16px;">Everything available in report templates. Use these in your Template_HTML field.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📊 Charts (Chart.js)</h4>
-            <table class="schema-table">
-                <tr><th>Type</th><th>Syntax</th></tr>
-                <tr><td>Bar</td><td><code>data-chart-type="bar"</code></td></tr>
-                <tr><td>Line</td><td><code>data-chart-type="line"</code></td></tr>
-                <tr><td>Pie</td><td><code>data-chart-type="pie"</code></td></tr>
-                <tr><td>Doughnut</td><td><code>data-chart-type="doughnut"</code></td></tr>
-                <tr><td>Radar / Spider</td><td><code>data-chart-type="radar"</code></td></tr>
-                <tr><td>Polar Area</td><td><code>data-chart-type="polarArea"</code></td></tr>
-                <tr><td>Scatter</td><td><code>data-chart-type="scatter"</code></td></tr>
-                <tr><td>Bubble</td><td><code>data-chart-type="bubble"</code></td></tr>
-            </table>
-            <p><strong>Simple:</strong> <code>&lt;canvas data-chart-type="bar" data-chart-table="Contacts" data-chart-group="Status" data-chart-title="By Status"&gt;&lt;/canvas&gt;</code></p>
-            <p><strong>Advanced:</strong> <code>&lt;canvas data-chart='{"type":"radar","data":{...},"options":{...}}'&gt;&lt;/canvas&gt;</code></p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🗺️ Maps (Leaflet)</h4>
-            <p><code>&lt;div data-map data-map-table="Contacts" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="First_Name" data-map-colour="Status" style="height:400px"&gt;&lt;/div&gt;</code></p>
-            <p>Requires Latitude/Longitude numeric columns. Use the Geocode Tool to populate them.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📱 QR Codes</h4>
-            <p><code>&lt;div data-qr="{{Email_1}}" data-qr-size="128"&gt;&lt;/div&gt;</code></p>
-            <p>Generates a QR code from any field value. Great for badges, labels, tickets.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📦 Barcodes</h4>
-            <p><code>&lt;div data-barcode="{{id}}" data-barcode-format="CODE128"&gt;&lt;/div&gt;</code></p>
-            <p>Formats: CODE128, EAN13, EAN8, UPC, CODE39, ITF14, MSI, pharmacode</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🖼️ Assets / Images</h4>
-            <p><code>&lt;img data-asset="logo.png"&gt;</code></p>
-            <p>Upload files to the Assets attachment column in SysReports. Reference by filename.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📊 Excel Export</h4>
-            <p>The toolbar "Excel" button exports all &lt;table&gt; elements in the rendered report as an .xlsx file.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📅 Calendar Grids</h4>
-            <p><code>{{#monthGrid 2025 5}}{{#each days}}...{{/each}}{{/monthGrid}}</code></p>
-            <p>Generates a month calendar structure. Combine with event data to build printable calendars.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📐 Layout Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>What it does</th></tr>
-                <tr><td><code>{{pageBreak}}</code></td><td>Insert a print page break</td></tr>
-                <tr><td><code>{{#columns 2}}...{{/columns}}</code></td><td>Multi-column layout</td></tr>
-                <tr><td><code>{{#groupBy arr "field"}}...{{/groupBy}}</code></td><td>Group rows by a field</td></tr>
-                <tr><td><code>{{#filterBy arr "field" "value"}}...{{/filterBy}}</code></td><td>Filter rows</td></tr>
-                <tr><td><code>{{sortBy arr "field" "asc"}}</code></td><td>Sort rows</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🔢 Data Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{count arr}}</code></td><td>Number of rows</td></tr>
-                <tr><td><code>{{sum arr "field"}}</code></td><td>Sum of numeric field</td></tr>
-                <tr><td><code>{{avg arr "field"}}</code></td><td>Average</td></tr>
-                <tr><td><code>{{max arr "field"}}</code></td><td>Maximum value</td></tr>
-                <tr><td><code>{{min arr "field"}}</code></td><td>Minimum value</td></tr>
-                <tr><td><code>{{percent a b}}</code></td><td>Percentage string (e.g. "45.2%")</td></tr>
-                <tr><td><code>{{unique arr "field"}}</code></td><td>Unique values array</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📅 Date Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{formatDate field}}</code></td><td>25 May 2025</td></tr>
-                <tr><td><code>{{formatDateTime field}}</code></td><td>25 May 2025 14:30</td></tr>
-                <tr><td><code>{{now}}</code></td><td>Current date</td></tr>
-                <tr><td><code>{{year field}}</code></td><td>2025</td></tr>
-                <tr><td><code>{{monthName 5}}</code></td><td>June</td></tr>
-                <tr><td><code>{{dayOfWeek field}}</code></td><td>Mon, Tue, etc.</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🔤 String & Logic Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{uppercase str}}</code></td><td>UPPERCASE</td></tr>
-                <tr><td><code>{{lowercase str}}</code></td><td>lowercase</td></tr>
-                <tr><td><code>{{truncate str 20}}</code></td><td>First 20 chars...</td></tr>
-                <tr><td><code>{{replace str "old" "new"}}</code></td><td>String replacement</td></tr>
-                <tr><td><code>{{#if (eq Status "Active")}}...{{/if}}</code></td><td>Conditional</td></tr>
-                <tr><td><code>{{#if (gt count 10)}}...{{/if}}</code></td><td>Numeric comparison</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🏷️ Report Modes (Filter_Mode)</h4>
-            <table class="schema-table">
-                <tr><th>Mode</th><th>Behaviour</th></tr>
-                <tr><td><code>record</code></td><td>Uses the selected record from the linked widget. Linked tables auto-filtered.</td></tr>
-                <tr><td><code>all</code></td><td>Fetches all data, renders immediately. No filter popup.</td></tr>
-                <tr><td><code>filtered</code></td><td>Shows filter popup before rendering. Define filters in the Filters JSON column.</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🔍 Filter Types (Filters JSON)</h4>
-            <table class="schema-table">
-                <tr><th>Type</th><th>UI</th><th>Example</th></tr>
-                <tr><td><code>choice</code></td><td>Multi-select checkboxes</td><td><code>{"field":"Status","label":"Status","type":"choice","table":"Contacts"}</code></td></tr>
-                <tr><td><code>date-range</code></td><td>From/To date pickers</td><td><code>{"field":"Last_Updated","label":"Updated","type":"date-range","table":"Contacts"}</code></td></tr>
-                <tr><td><code>number-range</code></td><td>Min/Max inputs</td><td><code>{"field":"Score","label":"Score","type":"number-range","table":"Contacts"}</code></td></tr>
-                <tr><td><code>text</code></td><td>Free text search</td><td><code>{"field":"Last_Name","label":"Name","type":"text","table":"Contacts"}</code></td></tr>
-                <tr><td><code>boolean</code></td><td>Checkbox</td><td><code>{"field":"Active","label":"Active only","type":"boolean","table":"Contacts"}</code></td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📋 SysReports Table Columns</h4>
-            <table class="schema-table">
-                <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
-                <tr><td>Report_Name</td><td>Text</td><td>Display name</td></tr>
-                <tr><td>Description</td><td>Text</td><td>Shown in picker</td></tr>
-                <tr><td>Link_Table</td><td>Text</td><td>Which page this report appears on</td></tr>
-                <tr><td>Data_Tables</td><td>Text</td><td>Comma-separated tables to fetch</td></tr>
-                <tr><td>Filter_Mode</td><td>Choice</td><td>record / all / filtered</td></tr>
-                <tr><td>Template_HTML</td><td>Text</td><td>The Handlebars HTML template</td></tr>
-                <tr><td>Filters</td><td>Text</td><td>JSON array of filter definitions</td></tr>
-                <tr><td>Assets</td><td>Attachments</td><td>Logos, images (reference via data-asset)</td></tr>
-            </table>
-        </div>
-        `;
-    }
+    window.selectReport = (i) => renderReport(reports[i], currentRecord);
+    window.showPicker = showPicker;
+    window.exportToExcel = exportToExcel;
 
     // ── Initialise ──────────────────────────────────────────────────────────
+    grist.onRecord((record) => { if (record && record.id) { currentRecord = record; const visible = linkedTableId ? reports.filter(r => (r.Link_Table || "").trim() === linkedTableId) : reports; if (visible.length === 1) renderReport(visible[0], currentRecord); } });
+
+    async function detectLinkedTable() { try { const t = await grist.selectedTable.getTableId(); if (t) linkedTableId = t; } catch(e) {} }
+
     setTimeout(async () => {
         try {
-            schema = await getSchema();
+            await detectLinkedTable();
             reports = await fetchTable(REPORTS_TABLE);
-            renderCreatePanel();
+            showPicker();
         } catch(e) {
-            document.getElementById("panel-create").innerHTML = `<div class="status status-error">Error: ${e.message}</div>`;
+            app.innerHTML = `<div class="report-error">Could not load reports: ${e.message}<br><small>Ensure "${REPORTS_TABLE}" table exists with: Report_Name, Description, Link_Table, Data_Tables, Filter_Mode, Template_HTML, Filters, Assets</small></div>`;
         }
     }, 500);
 
+    grist.onRecord((record) => { if (record && record.id) currentRecord = record; });
 })();
 </script>
 </body>
