@@ -273,7 +273,6 @@ OUTPUT RULES:
 - Include @media print { } rules for clean PDF output (hide non-essential elements, avoid page-break inside cards).
 - ABSOLUTELY NO <script> TAGS OR JAVASCRIPT. The template is injected via innerHTML which does not execute scripts. All interactivity is handled by declarative data attributes (see VISUAL ELEMENTS below).
 - Do NOT use DOMContentLoaded, window.onload, setTimeout, or any JS initialisation code.
-- Do NOT generate the template immediately. First, ask 3-5 clarifying questions about the report requirements (layout preferences, which fields to highlight, colour scheme, print orientation, grouping logic). Then generate the template after receiving answers.
 
 DATA STRUCTURE:
 - Data is an object where each table name is a key containing an array of row objects.
@@ -282,6 +281,8 @@ DATA STRUCTURE:
 - data-chart-group auto-counts occurrences — no need to pre-aggregate data.
 - Every row has an "id" field (numeric record ID) accessible as {{id}}.
 - Reference columns (Ref fields) store the numeric ID of the referenced record, NOT the display name.
+- Always handle empty tables gracefully: use {{#each Table}}...{{else}}<p>No records found</p>{{/each}} for linked/secondary tables to avoid rendering empty headers or broken layouts.
+- Always wrap Date-type columns in {{formatDate field}} or {{formatDateTime field}}, and monetary Numeric fields in {{currency field "GBP"}} or {{formatNumber field}}.
 
 CRITICAL — HOW RECORD MODE WORKS:
 - In "record" mode, the widget has ALREADY filtered all data for you:
@@ -374,13 +375,18 @@ FORMATTING HELPERS (inline, return text):
   {{currency value "GBP"}} — £1,234.56 (supports any ISO currency code)
   {{timeAgo timestamp}} — "3 days ago", "2 months ago"
 
-STYLE GUIDE:
+${output === "widget" ? `STYLE GUIDE:
 - Professional, clean, modern. Think Power BI / executive dashboard.
 - Use KPI cards (big number + label) for summary metrics.
 - Use colour-coded badges/pills for status fields.
 - Use subtle borders, rounded corners, consistent spacing.
 - Dark headers with white text for section titles.
-- Tables: alternating row colours, hover highlight, compact font size.
+- Tables: alternating row colours, hover highlight, compact font size.` : `STYLE GUIDE:
+- Professional, clean, minimal. Optimised for paper/PDF output.
+- Use compact font sizes (10-11px body, 8-9px table cells).
+- Use thin borders and lines to separate sections — avoid heavy background colours.
+- Tables: full-width, alternating light row shading, compact padding.
+- Use bold text and underlines for emphasis instead of colour blocks.`}
 ${mode === "record" ? `\nMODE: SINGLE RECORD — The primary table will contain exactly one row, but it is still passed as an ARRAY. You MUST wrap all primary table field access inside {{#each PrimaryTableName}}...{{/each}}. Example:
   {{#each Contacts}}
     <h1>{{First_Name}} {{Last_Name}}</h1>
