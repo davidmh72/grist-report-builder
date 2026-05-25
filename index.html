@@ -250,8 +250,9 @@
 Generate a complete HTML template (HTML + inline CSS + Handlebars placeholders) for the following report.
 
 OUTPUT RULES:
-- Output ONLY the HTML. No markdown, no code fences, no explanation.
-- Start with <style> and end with the final </div>.
+- Output the HTML inside a single code block (triple backticks with html language tag).
+- Start the code with <style> and end with the final </div>.
+- Do NOT output any text, explanation, or commentary outside the code block.
 - Use a <style> block for all CSS. Use CSS Grid for dashboard layouts.
 - Include @media print { } rules for clean PDF output (hide non-essential elements, avoid page-break inside cards).
 - ABSOLUTELY NO <script> TAGS OR JAVASCRIPT. The template is injected via innerHTML which does not execute scripts. All interactivity is handled by declarative data attributes (see VISUAL ELEMENTS below).
@@ -263,6 +264,30 @@ DATA STRUCTURE:
 - Access: {{#each ${tables[0]}}}{{field_name}}{{/${tables[0]}}}
 - The first table in the list is the primary table.
 - data-chart-group auto-counts occurrences — no need to pre-aggregate data.
+- Every row has an "id" field (numeric record ID) accessible as {{id}}.
+- Reference columns (Ref fields) store the numeric ID of the referenced record, NOT the display name.
+
+CRITICAL — HOW RECORD MODE WORKS:
+- In "record" mode, the widget has ALREADY filtered all data for you:
+  - The primary table contains ONLY the selected record (1 row)
+  - All other tables listed in Data_Tables are ALREADY filtered to only rows related to that record
+- You do NOT need to manually filter linked tables in the template
+- Simply loop over each table directly: {{#each TableName}}...{{/each}} — the data is already correct
+- Do NOT use {{#if (eq SomeRef ../id)}} or any manual filtering logic — the widget handles this automatically
+- Do NOT try to match records by name, email, ID, or any field — all filtering is pre-done
+
+CRITICAL — HOW ALL/FILTERED MODE WORKS:
+- All tables contain their full (or user-filtered) dataset
+- Loop over them directly: {{#each Contacts}}...{{/each}}
+- For linked table data within a loop, you CANNOT access other tables from inside {{#each}}
+- Use {{#groupBy}} or {{#filterBy}} on the same table, not cross-table lookups
+- Charts handle cross-table automatically via data-chart-table attribute
+
+SCOPE RULES:
+- Inside {{#each Contacts}}, access fields directly: {{First_Name}}, {{Email}}
+- To access the root data from inside a loop, use @root: {{@root.Deals}}, {{count @root.Tasks}}
+- To access parent context, use ../: {{../someValue}}
+- {{@index}} gives the current loop index (0-based)
 
 HANDLEBARS HELPERS:
   BLOCK helpers (use {{#helper}}...{{/helper}}, render inner content):
