@@ -1,4 +1,11 @@
 <!DOCTYPE html>
+<!--
+  ============================================================
+  REPORT BUILDER (report_builder.html)
+  Grist Report Widget — create and edit report templates
+  GitHub repo: grist-report-builder
+  ============================================================
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -170,6 +177,13 @@
             </div>
             <div class="form-row">
                 <div class="form-group">
+                    <label>Output</label>
+                    <select id="rpt-output">
+                        <option value="widget" ${r.Output === "widget" ? "selected" : ""}>Widget (screen)</option>
+                        <option value="print" ${r.Output === "print" ? "selected" : ""}>Print (paper)</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Link Table (which page it appears on)</label>
                     <select id="rpt-link"><option value="">-- Select --</option>${tableOptions}</select>
                 </div>
@@ -233,6 +247,7 @@
         const dataTables = document.getElementById("rpt-data").value || linkTable;
         const request = document.getElementById("rpt-request").value;
         const mode = document.getElementById("rpt-mode").value;
+        const output = document.getElementById("rpt-output").value;
 
         const tables = dataTables.split(",").map(t => t.trim()).filter(Boolean);
         let schemaText = "";
@@ -373,6 +388,24 @@ ${mode === "record" ? `\nMODE: SINGLE RECORD — The primary table will contain 
   {{/each}}
 Do NOT access fields like {{First_Name}} at the top level — that will not work. Always use {{#each TableName}} even for a single record.
 Linked tables (Deals, Tasks, etc.) are also arrays filtered to this record. Loop them with {{#each Deals}}...{{/each}}.` : ""}${mode === "filtered" ? "\nMODE: FILTERED — Data is pre-filtered by the user. Design a summary dashboard with KPI cards, charts, and a detail table." : ""}${mode === "all" ? "\nMODE: ALL DATA — Full dataset. Design a comprehensive overview with charts and grouped tables." : ""}
+${output === "print" ? `\nOUTPUT: PRINT (PAPER)
+- Design for A4/Letter paper, not screen.
+- Use a single-column or simple two-column layout. NO CSS Grid dashboards.
+- Use compact font sizes (10-11px body, 8-9px table cells).
+- Minimise whitespace — tight padding and margins.
+- Use light colours only — avoid dark backgrounds (they waste ink).
+- Use borders and lines to separate sections instead of background colours.
+- Add page-break-before on major sections if the report is long.
+- Tables should be full-width with thin borders.
+- Charts should be small (max 300px height) and positioned inline.
+- Do NOT use box-shadow, border-radius, or gradients.
+- Include a header with report title and date, and a footer with page context.` : `\nOUTPUT: WIDGET (SCREEN)
+- Design for screen display inside a Grist widget.
+- Use CSS Grid for dashboard layouts with cards.
+- Use generous padding, rounded corners, subtle shadows.
+- Dark headers, colour-coded badges, modern styling.
+- Charts can be any size. Maps are interactive.
+- Optimise for visual impact and readability on screen.`}
 
 DATABASE SCHEMA:
 ${schemaText}
@@ -484,6 +517,7 @@ WHEN GENERATING:
         const linkTable = document.getElementById("rpt-link").value;
         const dataTables = document.getElementById("rpt-data").value.trim();
         const mode = document.getElementById("rpt-mode").value;
+        const output = document.getElementById("rpt-output").value;
         const templateHTML = document.getElementById("rpt-template").value;
         const filters = document.getElementById("rpt-filters").value.trim();
         const requirements = document.getElementById("rpt-request").value.trim();
@@ -492,29 +526,19 @@ WHEN GENERATING:
         if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
 
         try {
-            let saveName = name;
-
             if (existingId) {
-                // Versioning: create a NEW record with incremented version number
-                // Determine version number from name
-                const versionMatch = name.match(/- Version (\d+)$/);
-                if (versionMatch) {
-                    const nextVersion = parseInt(versionMatch[1]) + 1;
-                    saveName = name.replace(/- Version \d+$/, `- Version ${nextVersion}`);
-                } else {
-                    saveName = name + " - Version 2";
-                }
-
+                // Versioning: name is already incremented from editReport()
                 // Deactivate the old version
                 await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, { Active: false }]]);
 
                 // Create new version
                 await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, {
-                    Report_Name: saveName,
+                    Report_Name: name,
                     Description: desc,
                     Link_Table: linkTable,
                     Data_Tables: dataTables,
                     Filter_Mode: mode,
+                    Output: output,
                     Template_HTML: templateHTML,
                     Filters: filters,
                     Report_Requirements: requirements,
@@ -528,6 +552,7 @@ WHEN GENERATING:
                     Link_Table: linkTable,
                     Data_Tables: dataTables,
                     Filter_Mode: mode,
+                    Output: output,
                     Template_HTML: templateHTML,
                     Filters: filters,
                     Report_Requirements: requirements,
@@ -543,7 +568,7 @@ WHEN GENERATING:
             app.innerHTML = `<div style="text-align:center; padding:60px 20px;">
                 <div style="font-size:48px; margin-bottom:16px;">✅</div>
                 <h2 style="font-size:18px; color:#16b378; margin-bottom:8px;">Report Saved!</h2>
-                <p style="font-size:13px; color:#666;">"${saveName}" has been saved to ${REPORTS_TABLE}.</p>
+                <p style="font-size:13px; color:#666;">"${name}" has been saved to ${REPORTS_TABLE}.</p>
                 <button class="btn btn-primary" onclick="switchTab('create')" style="margin-top:20px;">← Back to Builder</button>
             </div>`;
         } catch(e) {
@@ -568,6 +593,14 @@ WHEN GENERATING:
     window.editReport = (id) => {
         const report = reports.find(r => r.id === id);
         if (!report) return;
+        // Increment version in the name for the new copy
+        const editCopy = { ...report };
+        const versionMatch = editCopy.Report_Name.match(/- Version (\d+)$/);
+        if (versionMatch) {
+            editCopy.Report_Name = editCopy.Report_Name.replace(/- Version \d+$/, `- Version ${parseInt(versionMatch[1]) + 1}`);
+        } else {
+            editCopy.Report_Name = editCopy.Report_Name + " - Version 2";
+        }
         // Switch to create tab but relabel it as "Edit"
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
@@ -575,7 +608,7 @@ WHEN GENERATING:
         createTab.textContent = "Edit Report";
         createTab.classList.add("active");
         document.getElementById("panel-create").classList.add("active");
-        renderCreatePanel(report);
+        renderCreatePanel(editCopy);
     };
 
     // ── Schema Panel ────────────────────────────────────────────────────────
