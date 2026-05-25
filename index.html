@@ -348,7 +348,14 @@ ${schemaText}
 REPORT REQUEST:
 ${request}
 
-IMPORTANT: Do NOT generate the template yet. First, ask 3-5 clarifying questions to ensure you understand exactly what is needed (e.g. "Should the table show all fields or just key ones?", "Do you want a dark or light theme?", "Should records be grouped by any field?", "Portrait or landscape for print?"). After I answer, then generate the final template.`;
+IMPORTANT: Do NOT generate the template yet. First, ask 3-5 clarifying questions to ensure you understand exactly what is needed (e.g. "Should the table show all fields or just key ones?", "Do you want a dark or light theme?", "Should records be grouped by any field?", "Portrait or landscape for print?"). After I answer, then generate the final template.
+
+WHEN GENERATING:
+- Output valid, well-formed HTML only. Ensure all tags are properly closed.
+- Use the REAL column names from the DATABASE SCHEMA above — not placeholder or demo names.
+- Reference tables exactly as listed in the schema (case-sensitive).
+- Do not invent fields that don't exist in the schema. Only use columns listed above.
+- Do not include sample/hardcoded data. All values must come from Handlebars placeholders referencing real fields.`;
 
         document.getElementById("prompt-text").textContent = prompt;
         document.getElementById("prompt-output").style.display = "block";
