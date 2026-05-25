@@ -340,7 +340,13 @@ STYLE GUIDE:
 - Use subtle borders, rounded corners, consistent spacing.
 - Dark headers with white text for section titles.
 - Tables: alternating row colours, hover highlight, compact font size.
-${mode === "record" ? "\nMODE: SINGLE RECORD — Data contains only one row in the primary table. Design a detail/profile layout showing all fields clearly." : ""}${mode === "filtered" ? "\nMODE: FILTERED — Data is pre-filtered. Design a summary dashboard with KPI cards, charts, and a detail table." : ""}${mode === "all" ? "\nMODE: ALL DATA — Full dataset. Design a comprehensive overview with charts and grouped tables." : ""}
+${mode === "record" ? `\nMODE: SINGLE RECORD — The primary table will contain exactly one row, but it is still passed as an ARRAY. You MUST wrap all primary table field access inside {{#each PrimaryTableName}}...{{/each}}. Example:
+  {{#each Contacts}}
+    <h1>{{First_Name}} {{Last_Name}}</h1>
+    <p>{{Email}}</p>
+  {{/each}}
+Do NOT access fields like {{First_Name}} at the top level — that will not work. Always use {{#each TableName}} even for a single record.
+Linked tables (Deals, Tasks, etc.) are also arrays filtered to this record. Loop them with {{#each Deals}}...{{/each}}.` : ""}${mode === "filtered" ? "\nMODE: FILTERED — Data is pre-filtered by the user. Design a summary dashboard with KPI cards, charts, and a detail table." : ""}${mode === "all" ? "\nMODE: ALL DATA — Full dataset. Design a comprehensive overview with charts and grouped tables." : ""}
 
 DATABASE SCHEMA:
 ${schemaText}
