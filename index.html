@@ -79,11 +79,13 @@
         <div class="tab active" onclick="switchTab('create')">Create New</div>
         <div class="tab" onclick="switchTab('edit')">Edit Existing</div>
         <div class="tab" onclick="switchTab('schema')">Schema Reference</div>
+        <div class="tab" onclick="switchTab('help')">Help & Features</div>
     </div>
 
     <div id="panel-create" class="panel active"></div>
     <div id="panel-edit" class="panel"></div>
     <div id="panel-schema" class="panel"></div>
+    <div id="panel-help" class="panel"></div>
 </div>
 
 <script>
@@ -141,6 +143,7 @@
         if (tab === "create") renderCreatePanel();
         if (tab === "edit") renderEditPanel();
         if (tab === "schema") renderSchemaPanel();
+        if (tab === "help") renderHelpPanel();
     };
 
     // ── Create Panel ──────────────────────────────────────────────────────
@@ -265,8 +268,21 @@ RULES:
   {{now}} — current date string
   {{eq a b}}, {{gt a b}}, {{lt a b}} — comparisons (use with #if)
   {{uppercase str}}, {{truncate str length}}
-- For charts, use: <canvas data-chart-type="bar|line|pie|doughnut" data-chart-table="TableName" data-chart-group="FieldName" data-chart-title="Title">
+  {{formatDateTime field}} — date + time
+  {{year field}}, {{month field}}, {{dayOfWeek field}} — date parts
+  {{monthName 5}} — "June"
+  {{replace str "find" "replacement"}} — string replace
+- For charts, use: <canvas data-chart-type="TYPE" data-chart-table="TableName" data-chart-group="FieldName" data-chart-title="Title">
+  Available chart types: bar, line, pie, doughnut, radar, polarArea, scatter, bubble
+  For complex charts (multi-dataset, radar with custom axes), use full JSON config:
+  <canvas data-chart='{"type":"radar","data":{"labels":[...],"datasets":[...]},"options":{...}}'>
+- For maps: <div data-map data-map-table="TableName" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="Name" data-map-colour="Status" style="height:400px"></div>
+- For QR codes: <div data-qr="{{field_value}}" data-qr-size="128"></div>
+- For barcodes: <div data-barcode="{{field_value}}" data-barcode-format="CODE128"></div>
 - For assets/logos: <img data-asset="filename.png">
+- For page breaks (multi-page print): {{pageBreak}}
+- For multi-column layout: {{#columns 2}}...{{/columns}}
+- For calendar grids: {{#monthGrid year month}}{{#each days}}...{{/each}}{{/monthGrid}}
 - Use professional styling: clean typography, subtle borders, colour-coded badges.
 - Include @media print rules for clean PDF output.
 - Make it look like a Power BI dashboard: KPI cards, charts, clean tables.
@@ -469,6 +485,129 @@ Generate the template now.`;
             area.innerHTML = `<div class="status status-${type}">${msg}</div>`;
             setTimeout(() => { area.innerHTML = ""; }, 5000);
         }
+    }
+
+    // ── Help Panel ────────────────────────────────────────────────────────
+    function renderHelpPanel() {
+        document.getElementById("panel-help").innerHTML = `
+        <div style="font-size:12px; line-height:1.8; max-width:700px;">
+            <h3 style="font-size:16px; margin-bottom:12px; color:#264653;">Report Writer Features</h3>
+            <p style="color:#666; margin-bottom:16px;">Everything available in report templates. Use these in your Template_HTML field.</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📊 Charts (Chart.js)</h4>
+            <table class="schema-table">
+                <tr><th>Type</th><th>Syntax</th></tr>
+                <tr><td>Bar</td><td><code>data-chart-type="bar"</code></td></tr>
+                <tr><td>Line</td><td><code>data-chart-type="line"</code></td></tr>
+                <tr><td>Pie</td><td><code>data-chart-type="pie"</code></td></tr>
+                <tr><td>Doughnut</td><td><code>data-chart-type="doughnut"</code></td></tr>
+                <tr><td>Radar / Spider</td><td><code>data-chart-type="radar"</code></td></tr>
+                <tr><td>Polar Area</td><td><code>data-chart-type="polarArea"</code></td></tr>
+                <tr><td>Scatter</td><td><code>data-chart-type="scatter"</code></td></tr>
+                <tr><td>Bubble</td><td><code>data-chart-type="bubble"</code></td></tr>
+            </table>
+            <p><strong>Simple:</strong> <code>&lt;canvas data-chart-type="bar" data-chart-table="Contacts" data-chart-group="Status" data-chart-title="By Status"&gt;&lt;/canvas&gt;</code></p>
+            <p><strong>Advanced:</strong> <code>&lt;canvas data-chart='{"type":"radar","data":{...},"options":{...}}'&gt;&lt;/canvas&gt;</code></p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🗺️ Maps (Leaflet)</h4>
+            <p><code>&lt;div data-map data-map-table="Contacts" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="First_Name" data-map-colour="Status" style="height:400px"&gt;&lt;/div&gt;</code></p>
+            <p>Requires Latitude/Longitude numeric columns. Use the Geocode Tool to populate them.</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📱 QR Codes</h4>
+            <p><code>&lt;div data-qr="{{Email_1}}" data-qr-size="128"&gt;&lt;/div&gt;</code></p>
+            <p>Generates a QR code from any field value. Great for badges, labels, tickets.</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📦 Barcodes</h4>
+            <p><code>&lt;div data-barcode="{{id}}" data-barcode-format="CODE128"&gt;&lt;/div&gt;</code></p>
+            <p>Formats: CODE128, EAN13, EAN8, UPC, CODE39, ITF14, MSI, pharmacode</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🖼️ Assets / Images</h4>
+            <p><code>&lt;img data-asset="logo.png"&gt;</code></p>
+            <p>Upload files to the Assets attachment column in SysReports. Reference by filename.</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📊 Excel Export</h4>
+            <p>The toolbar "Excel" button exports all &lt;table&gt; elements in the rendered report as an .xlsx file.</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📅 Calendar Grids</h4>
+            <p><code>{{#monthGrid 2025 5}}{{#each days}}...{{/each}}{{/monthGrid}}</code></p>
+            <p>Generates a month calendar structure. Combine with event data to build printable calendars.</p>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📐 Layout Helpers</h4>
+            <table class="schema-table">
+                <tr><th>Helper</th><th>What it does</th></tr>
+                <tr><td><code>{{pageBreak}}</code></td><td>Insert a print page break</td></tr>
+                <tr><td><code>{{#columns 2}}...{{/columns}}</code></td><td>Multi-column layout</td></tr>
+                <tr><td><code>{{#groupBy arr "field"}}...{{/groupBy}}</code></td><td>Group rows by a field</td></tr>
+                <tr><td><code>{{#filterBy arr "field" "value"}}...{{/filterBy}}</code></td><td>Filter rows</td></tr>
+                <tr><td><code>{{sortBy arr "field" "asc"}}</code></td><td>Sort rows</td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🔢 Data Helpers</h4>
+            <table class="schema-table">
+                <tr><th>Helper</th><th>Output</th></tr>
+                <tr><td><code>{{count arr}}</code></td><td>Number of rows</td></tr>
+                <tr><td><code>{{sum arr "field"}}</code></td><td>Sum of numeric field</td></tr>
+                <tr><td><code>{{avg arr "field"}}</code></td><td>Average</td></tr>
+                <tr><td><code>{{max arr "field"}}</code></td><td>Maximum value</td></tr>
+                <tr><td><code>{{min arr "field"}}</code></td><td>Minimum value</td></tr>
+                <tr><td><code>{{percent a b}}</code></td><td>Percentage string (e.g. "45.2%")</td></tr>
+                <tr><td><code>{{unique arr "field"}}</code></td><td>Unique values array</td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📅 Date Helpers</h4>
+            <table class="schema-table">
+                <tr><th>Helper</th><th>Output</th></tr>
+                <tr><td><code>{{formatDate field}}</code></td><td>25 May 2025</td></tr>
+                <tr><td><code>{{formatDateTime field}}</code></td><td>25 May 2025 14:30</td></tr>
+                <tr><td><code>{{now}}</code></td><td>Current date</td></tr>
+                <tr><td><code>{{year field}}</code></td><td>2025</td></tr>
+                <tr><td><code>{{monthName 5}}</code></td><td>June</td></tr>
+                <tr><td><code>{{dayOfWeek field}}</code></td><td>Mon, Tue, etc.</td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🔤 String & Logic Helpers</h4>
+            <table class="schema-table">
+                <tr><th>Helper</th><th>Output</th></tr>
+                <tr><td><code>{{uppercase str}}</code></td><td>UPPERCASE</td></tr>
+                <tr><td><code>{{lowercase str}}</code></td><td>lowercase</td></tr>
+                <tr><td><code>{{truncate str 20}}</code></td><td>First 20 chars...</td></tr>
+                <tr><td><code>{{replace str "old" "new"}}</code></td><td>String replacement</td></tr>
+                <tr><td><code>{{#if (eq Status "Active")}}...{{/if}}</code></td><td>Conditional</td></tr>
+                <tr><td><code>{{#if (gt count 10)}}...{{/if}}</code></td><td>Numeric comparison</td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🏷️ Report Modes (Filter_Mode)</h4>
+            <table class="schema-table">
+                <tr><th>Mode</th><th>Behaviour</th></tr>
+                <tr><td><code>record</code></td><td>Uses the selected record from the linked widget. Linked tables auto-filtered.</td></tr>
+                <tr><td><code>all</code></td><td>Fetches all data, renders immediately. No filter popup.</td></tr>
+                <tr><td><code>filtered</code></td><td>Shows filter popup before rendering. Define filters in the Filters JSON column.</td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">🔍 Filter Types (Filters JSON)</h4>
+            <table class="schema-table">
+                <tr><th>Type</th><th>UI</th><th>Example</th></tr>
+                <tr><td><code>choice</code></td><td>Multi-select checkboxes</td><td><code>{"field":"Status","label":"Status","type":"choice","table":"Contacts"}</code></td></tr>
+                <tr><td><code>date-range</code></td><td>From/To date pickers</td><td><code>{"field":"Last_Updated","label":"Updated","type":"date-range","table":"Contacts"}</code></td></tr>
+                <tr><td><code>number-range</code></td><td>Min/Max inputs</td><td><code>{"field":"Score","label":"Score","type":"number-range","table":"Contacts"}</code></td></tr>
+                <tr><td><code>text</code></td><td>Free text search</td><td><code>{"field":"Last_Name","label":"Name","type":"text","table":"Contacts"}</code></td></tr>
+                <tr><td><code>boolean</code></td><td>Checkbox</td><td><code>{"field":"Active","label":"Active only","type":"boolean","table":"Contacts"}</code></td></tr>
+            </table>
+
+            <h4 style="margin:16px 0 8px; color:#16b378;">📋 SysReports Table Columns</h4>
+            <table class="schema-table">
+                <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+                <tr><td>Report_Name</td><td>Text</td><td>Display name</td></tr>
+                <tr><td>Description</td><td>Text</td><td>Shown in picker</td></tr>
+                <tr><td>Link_Table</td><td>Text</td><td>Which page this report appears on</td></tr>
+                <tr><td>Data_Tables</td><td>Text</td><td>Comma-separated tables to fetch</td></tr>
+                <tr><td>Filter_Mode</td><td>Choice</td><td>record / all / filtered</td></tr>
+                <tr><td>Template_HTML</td><td>Text</td><td>The Handlebars HTML template</td></tr>
+                <tr><td>Filters</td><td>Text</td><td>JSON array of filter definitions</td></tr>
+                <tr><td>Assets</td><td>Attachments</td><td>Logos, images (reference via data-asset)</td></tr>
+            </table>
+        </div>
+        `;
     }
 
     // ── Initialise ──────────────────────────────────────────────────────────
