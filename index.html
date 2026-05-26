@@ -354,6 +354,13 @@ HANDLEBARS HELPERS:
     {{and a b}}, {{or a b}}, {{not a}} — logic
     {{pageBreak}} — insert print page break
     {{unique arr "field"}} — returns array of unique values
+    {{chartConfig "type" arr "groupField" "metrics" "title"}} — returns full Chart.js JSON config (use inside data-chart attribute)
+    {{groupCount arr "field"}} — returns object {key: count, ...}
+    {{groupSum arr "field" "valueField"}} — returns object {key: sum, ...}
+    {{groupAvg arr "field" "valueField"}} — returns object {key: avg, ...}
+    {{keys obj}} — returns array of object keys
+    {{values obj}} — returns array of object values
+    {{json obj}} — returns JSON string of any value
 
   SUB-EXPRESSION helpers (can be used inside parentheses):
     {{#each (sortBy arr "field" "asc")}} ✓ — sortBy returns an array
@@ -377,7 +384,13 @@ VISUAL ELEMENTS:
     Multi-dataset (side-by-side bars): data-chart-datasets="count:Count,sum:Value:Total Value"
       Format: "agg:field:label" — agg is count, sum, or avg. Field is the column name. Label is optional display name.
       Example: <canvas data-chart-type="bar" data-chart-table="Deals" data-chart-group="Stage" data-chart-datasets="count:Deals:Deal Count,sum:Value:Total Value" data-chart-title="Pipeline by Stage">
-    Advanced (full Chart.js config): <canvas data-chart='{"type":"radar","data":{"labels":[...],"datasets":[...]},"options":{}}'>
+    Full Chart.js config via helper (for ANY chart — stacked, dual-axis, time-series, custom colours):
+      <canvas data-chart='{{chartConfig "bar" Deals "Stage" "count:Count,sum:Value:Total Value" "Pipeline"}}'></canvas>
+      chartConfig(type, array, groupField, metrics, title) — returns complete Chart.js JSON config.
+      Metrics format: comma-separated "agg:field:label" — agg is count, sum, or avg.
+    For fully custom Chart.js configs (radar, scatter, bubble, stacked, annotations):
+      <canvas data-chart='{"type":"bar","data":{"labels":["A","B"],"datasets":[...]},"options":{"scales":{"x":{"stacked":true},"y":{"stacked":true}}}}'></canvas>
+    IMPORTANT: Do NOT use block helpers ({{#groupBy}}, {{#each}}) inside data-chart attributes — they produce HTML not JSON. Use ONLY the {{chartConfig}} inline helper or write static JSON.
   Maps: <div data-map data-map-table="Table" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="Name" data-map-colour="Status" style="height:400px"></div>
     Add data-map-cluster="true" for marker clustering (groups nearby pins)
     Add data-map-heat="true" for heatmap mode (density visualisation)
