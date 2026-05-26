@@ -80,7 +80,7 @@
 <body>
 <div class="builder">
     <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance — v1.2.0</div>
+    <div class="subtitle">Create and edit report templates with AI assistance — v1.3.0</div>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('create')">New Report</div>
@@ -298,7 +298,7 @@ DATA STRUCTURE:
 - Data is an object where each table name is a key containing an array of row objects.
 - Access: {{#each ${tables[0]}}}{{field_name}}{{/${tables[0]}}}
 - The first table in the list is the primary table.
-- data-chart-group auto-counts occurrences — no need to pre-aggregate data.
+- data-chart-group auto-counts occurrences — no need to pre-aggregate data. Add data-chart-value="Field" to sum that field instead of counting.
 - Every row has an "id" field (numeric record ID) accessible as {{id}}.
 - Reference columns (Ref fields) store the numeric ID of the referenced record, NOT the display name.
 - Always handle empty tables gracefully: use {{#each Table}}...{{else}}<p>No records found</p>{{/each}} for linked/secondary tables to avoid rendering empty headers or broken layouts.
@@ -373,6 +373,10 @@ HANDLEBARS HELPERS:
 VISUAL ELEMENTS:
   Charts: <canvas data-chart-type="TYPE" data-chart-table="Table" data-chart-group="Field" data-chart-title="Title">
     Types: bar, line, pie, doughnut, radar, polarArea, scatter, bubble
+    Sum a field instead of counting: add data-chart-value="Field"
+    Multi-dataset (side-by-side bars): data-chart-datasets="count:Count,sum:Value:Total Value"
+      Format: "agg:field:label" — agg is count, sum, or avg. Field is the column name. Label is optional display name.
+      Example: <canvas data-chart-type="bar" data-chart-table="Deals" data-chart-group="Stage" data-chart-datasets="count:Deals:Deal Count,sum:Value:Total Value" data-chart-title="Pipeline by Stage">
     Advanced (full Chart.js config): <canvas data-chart='{"type":"radar","data":{"labels":[...],"datasets":[...]},"options":{}}'>
   Maps: <div data-map data-map-table="Table" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="Name" data-map-colour="Status" style="height:400px"></div>
     Add data-map-cluster="true" for marker clustering (groups nearby pins)
