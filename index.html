@@ -80,7 +80,7 @@
 <body>
 <div class="builder">
     <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance — v1.1.0</div>
+    <div class="subtitle">Create and edit report templates with AI assistance — v1.2.0</div>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('create')">New Report</div>
@@ -648,20 +648,45 @@ WHEN GENERATING:
 
     // ── Import Spec Utilities ──────────────────────────────────────────────
     function parseSpecTable(text) {
+        // Try pipe-delimited markdown table first
         const lines = text.trim().split("\n").filter(l => l.trim().startsWith("|"));
-        if (lines.length < 2) return null;
+        if (lines.length >= 2) {
+            const result = {};
+            const dataLines = lines.filter(l => !l.match(/^\|\s*[-:]+/));
+            const rows = dataLines.slice(1);
+            rows.forEach(line => {
+                const cells = line.split("|").map(c => c.trim()).filter(Boolean);
+                if (cells.length >= 2) {
+                    let field = cells[0].trim();
+                    let value = cells.slice(1).join("|").trim();
+                    value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
+                    result[field] = value;
+                }
+            });
+            if (Object.keys(result).length > 0) return result;
+        }
+
+        // Fallback: parse "FieldValue" pairs (copied from rendered table without pipes)
+        const KNOWN_FIELDS = ["Report_Name","Description","Link_Table","Data_Tables","Filter_Mode","Output","Filters","Report_Requirements"];
+        const raw = text.trim();
+        // Try to split on known field names
         const result = {};
-        const dataLines = lines.filter(l => !l.match(/^\|\s*[-:]+/));
-        const rows = dataLines.slice(1);
-        rows.forEach(line => {
-            const cells = line.split("|").map(c => c.trim()).filter(Boolean);
-            if (cells.length >= 2) {
-                let field = cells[0].trim();
-                let value = cells.slice(1).join("|").trim();
-                value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
-                result[field] = value;
+        for (let i = 0; i < KNOWN_FIELDS.length; i++) {
+            const field = KNOWN_FIELDS[i];
+            const idx = raw.indexOf(field);
+            if (idx === -1) continue;
+            const valueStart = idx + field.length;
+            // Find where the next field starts
+            let valueEnd = raw.length;
+            for (let j = 0; j < KNOWN_FIELDS.length; j++) {
+                if (j === i) continue;
+                const nextIdx = raw.indexOf(KNOWN_FIELDS[j], valueStart);
+                if (nextIdx > valueStart && nextIdx < valueEnd) valueEnd = nextIdx;
             }
-        });
+            let value = raw.slice(valueStart, valueEnd).trim();
+            value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
+            if (value) result[field] = value;
+        }
         return Object.keys(result).length > 0 ? result : null;
     }
 
@@ -733,7 +758,7 @@ WHEN GENERATING:
             schemaText += "\nTable: " + tableName + "\nColumns: " + tableInfo.columns.map(c => c.name + " (" + c.type + ")").join(", ") + "\n";
         }
 
-        const structure = 'You are helping me define a report specification for a Grist spreadsheet reporting system.\n\nGenerate a report spec in this EXACT markdown table format:\n\n| Field | Value |\n|-------|-------|\n| Report_Name | (descriptive name) |\n| Description | (one-line summary) |\n| Link_Table | (which table page this report appears on) |\n| Data_Tables | (comma-separated list of tables the report needs) |\n| Filter_Mode | (one of: all, record, filtered) |\n| Output | (one of: screen, print) |\n| Filters | (JSON array of filter definitions, or empty) |\n| Report_Requirements | (detailed description of what the report should show — KPIs, charts, tables, layout, styling) |\n\nFILTER MODES:\n- "all" — shows all data, no filter popup\n- "record" — shows data for the currently selected record (linked widget)\n- "filtered" — shows a filter popup before rendering\n\nFILTER TYPES (for Filter_Mode "filtered"):\n- Choice: {"field":"FieldName","label":"Display Label","type":"choice","table":"TableName"}\n- Date range: {"field":"FieldName","label":"Display Label","type":"date-range","table":"TableName"}\n- Number range: {"field":"FieldName","label":"Display Label","type":"number-range","table":"TableName"}\n- Text search: {"field":"FieldName","label":"Display Label","type":"text","table":"TableName"}\n- Boolean: {"field":"FieldName","label":"Display Label","type":"boolean","table":"TableName"}\n\nAVAILABLE FEATURES (mention in Report_Requirements if needed):\n- KPI cards (big number + label)\n- Charts: bar, line, pie, doughnut, radar, polarArea (via data attributes)\n- Maps with clustering or heatmap (requires Latitude/Longitude columns)\n- QR codes, barcodes\n- Progress bars, star ratings, colour-coded badges\n- Grouped tables, sorted tables\n- Multi-column layouts, mailing labels\n- Print page breaks\n\nDATABASE SCHEMA:\nAvailable tables: ' + tableList + '\n' + schemaText + '\nOUTPUT RULES:\n- Output ONLY the markdown table — no explanation, no commentary.\n- Wrap JSON values in backticks.\n- Report_Requirements should be detailed enough for a designer to build the template (mention specific fields, chart types, grouping, colour schemes).\n';
+        const structure = 'You are helping me define a report specification for a Grist spreadsheet reporting system.\n\nGenerate a report spec in this EXACT markdown table format, wrapped in a code block (triple backticks) so the formatting is preserved when copied:\n\n```\n| Field | Value |\n|-------|-------|\n| Report_Name | (descriptive name) |\n| Description | (one-line summary) |\n| Link_Table | (which table page this report appears on) |\n| Data_Tables | (comma-separated list of tables the report needs) |\n| Filter_Mode | (one of: all, record, filtered) |\n| Output | (one of: screen, print) |\n| Filters | (JSON array of filter definitions, or empty) |\n| Report_Requirements | (detailed description of what the report should show — KPIs, charts, tables, layout, styling) |\n```\n\nFILTER MODES:\n- "all" — shows all data, no filter popup\n- "record" — shows data for the currently selected record (linked widget)\n- "filtered" — shows a filter popup before rendering\n\nFILTER TYPES (for Filter_Mode "filtered"):\n- Choice: {"field":"FieldName","label":"Display Label","type":"choice","table":"TableName"}\n- Date range: {"field":"FieldName","label":"Display Label","type":"date-range","table":"TableName"}\n- Number range: {"field":"FieldName","label":"Display Label","type":"number-range","table":"TableName"}\n- Text search: {"field":"FieldName","label":"Display Label","type":"text","table":"TableName"}\n- Boolean: {"field":"FieldName","label":"Display Label","type":"boolean","table":"TableName"}\n\nAVAILABLE FEATURES (mention in Report_Requirements if needed):\n- KPI cards (big number + label)\n- Charts: bar, line, pie, doughnut, radar, polarArea (via data attributes)\n- Maps with clustering or heatmap (requires Latitude/Longitude columns)\n- QR codes, barcodes\n- Progress bars, star ratings, colour-coded badges\n- Grouped tables, sorted tables\n- Multi-column layouts, mailing labels\n- Print page breaks\n\nDATABASE SCHEMA:\nAvailable tables: ' + tableList + '\n' + schemaText + '\nOUTPUT RULES:\n- Output ONLY the markdown table inside a code block — no explanation, no commentary.\n- Wrap JSON values in backticks within the table cells.\n- Report_Requirements should be detailed enough for a designer to build the template (mention specific fields, chart types, grouping, colour schemes).\n';
 
         navigator.clipboard.writeText(structure).then(() => {
             showStatus("Spec structure copied to clipboard! Paste it into your AI chat.", "success");
