@@ -80,7 +80,7 @@
 <body>
 <div class="builder">
     <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance — v1.3.0</div>
+    <div class="subtitle">Create and edit report templates with AI assistance — v1.4.0</div>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('create')">New Report</div>
@@ -463,7 +463,22 @@ WHEN GENERATING:
 - Use the REAL column names from the DATABASE SCHEMA above — not placeholder or demo names.
 - Reference tables exactly as listed in the schema (case-sensitive).
 - Do not invent fields that don't exist in the schema. Only use columns listed above.
-- Do not include sample/hardcoded data. All values must come from Handlebars placeholders referencing real fields.`;
+- Do not include sample/hardcoded data. All values must come from Handlebars placeholders referencing real fields.
+
+VALIDATION CHECKLIST (verify before outputting):
+1. BLOCK NESTING: Every {{#each}}, {{#if}}, {{#groupBy}}, {{#filterBy}}, {{#columns}}, {{#labels}} must have a matching closing tag ({{/each}}, {{/if}}, etc.). Count opens and closes — they MUST match.
+2. NO BLOCK HELPERS IN ATTRIBUTES: Never use {{#each}}, {{#groupBy}}, {{#if}} inside HTML attribute values (especially data-chart='...'). Use only inline helpers like {{chartConfig}}, {{json}}, {{count}}.
+3. SCOPE ERRORS: Inside {{#each Table}}, fields are accessed directly ({{Field}}). To access other tables, use {{@root.OtherTable}}. Do NOT reference {{OtherTable}} without @root from inside a loop.
+4. HELPER ARGUMENTS: {{count}} takes an array, not a number. {{sum}} and {{avg}} take (array, "fieldName"). {{percent}} takes (numerator, denominator). {{formatDate}} takes a timestamp, NOT the output of {{now}}.
+5. UNCLOSED HTML TAGS: Every <div>, <table>, <tr>, <td>, <span> must be closed. Self-closing tags (<img>, <br>, <canvas>) do not need closing tags.
+6. CONDITIONAL BLOCKS INSIDE LOOPS: If you open {{#if}} inside {{#each}}, close it BEFORE closing the {{/each}}. Never interleave block boundaries.
+7. TRIPLE BRACES: Use {{{helper}}} (triple) only for helpers that return HTML (progressBar, stars, initials, watermark, signatureLine). Use {{helper}} (double) for text/number helpers.
+8. COMMA-SEPARATED VALUES: In data-chart-datasets, ensure no trailing comma. Format: "count:Count,sum:Value:Label" not "count:Count,sum:Value:Label,".
+9. QUOTES IN ATTRIBUTES: If an attribute value contains double quotes, use single quotes for the attribute wrapper, or use &quot; inside.
+10. {{else}} USAGE: {{else}} is only valid inside {{#if}} and {{#each}} blocks. Do NOT use {{else}} inside {{#groupBy}} or {{#filterBy}}.
+11. FIELD ACCESS IN LOOPS: Inside {{#each Table}}, access fields directly as {{Field}} — never {{Table.Field}} or {{Table.0.Field}}.
+12. sortBy IS INLINE ONLY: sortBy returns an array — use {{#each (sortBy arr "field" "asc")}}. Never write {{#sortBy}}.
+13. NO SUB-EXPRESSIONS INTO BLOCK HELPERS: Do NOT pass sub-expressions as the array argument to block helpers. ✗ {{#groupBy (sortBy arr "field") "key"}} — this causes "options.fn is not a function". ✓ Instead, sort first with {{#each (sortBy arr "field" "asc")}} then group inside, or use groupBy on the raw array without sorting.`;
 
         document.getElementById("prompt-text").textContent = prompt;
         document.getElementById("prompt-output").style.display = "block";
