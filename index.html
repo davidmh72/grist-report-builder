@@ -80,20 +80,18 @@
 <body>
 <div class="builder">
     <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance — v1.0.1</div>
+    <div class="subtitle">Create and edit report templates with AI assistance — v1.1.0</div>
 
     <div class="tabs">
-        <div class="tab active" onclick="switchTab('create')">Create New</div>
+        <div class="tab active" onclick="switchTab('create')">New Report</div>
         <div class="tab" onclick="switchTab('edit')">Edit Existing</div>
         <div class="tab" onclick="switchTab('schema')">Schema Reference</div>
-        <div class="tab" onclick="switchTab('import')">Import Spec</div>
         <div class="tab" onclick="switchTab('help')">Help & Features</div>
     </div>
 
     <div id="panel-create" class="panel active"></div>
     <div id="panel-edit" class="panel"></div>
     <div id="panel-schema" class="panel"></div>
-    <div id="panel-import" class="panel"></div>
     <div id="panel-help" class="panel"></div>
 </div>
 
@@ -145,14 +143,12 @@
     window.switchTab = (tab) => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        // Reset first tab label
-        document.querySelector('.tab[onclick*="create"]').textContent = "Create New";
+        document.querySelector('.tab[onclick*="create"]').textContent = "New Report";
         document.querySelector(`.tab[onclick*="${tab}"]`).classList.add("active");
         document.getElementById(`panel-${tab}`).classList.add("active");
         if (tab === "create") renderCreatePanel();
         if (tab === "edit") renderEditPanel();
         if (tab === "schema") renderSchemaPanel();
-        if (tab === "import") renderImportPanel();
         if (tab === "help") renderHelpPanel();
     };
 
@@ -164,6 +160,26 @@
 
         document.getElementById("panel-create").innerHTML = `
             <div id="status-area"></div>
+
+            ${!isEdit ? `<div style="background:#f0faf6; border:1px solid #d0ebe0; border-radius:8px; padding:14px 16px; margin-bottom:20px;">
+                <div style="font-size:12px; font-weight:600; color:#16b378; margin-bottom:8px;">⚡ Quick Start (AI-assisted)</div>
+                <div class="btn-row" style="margin-bottom:10px;">
+                    <button class="btn btn-secondary" onclick="copySpecStructure()">📋 Copy Schema Prompt for AI</button>
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                    <label style="margin-bottom:4px;">Paste AI-generated spec here</label>
+                    <textarea id="import-spec" style="min-height:80px; font-family: 'SF Mono', 'Fira Code', monospace; font-size:11px;" placeholder="| Field | Value |&#10;|-------|-------|&#10;| Report_Name | My Report |&#10;| Data_Tables | Contacts,Deals |&#10;| Filter_Mode | all |&#10;| Report_Requirements | ... |"></textarea>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="importSpecToForm()">📥 Import Spec to Form</button>
+                    <button class="btn" onclick="previewImport()">👁 Preview Parse</button>
+                </div>
+                <div id="import-preview" style="margin-top:10px; display:none;">
+                    <div id="import-preview-content" style="background:#fff; border:1px solid #eee; border-radius:6px; padding:10px; font-size:11px;"></div>
+                </div>
+            </div>
+            <div style="text-align:center; color:#bbb; font-size:11px; margin-bottom:16px;">── or fill in manually ──</div>` : ""}
+
             <div class="form-row">
                 <div class="form-group">
                     <label>Report Name</label>
@@ -182,8 +198,8 @@
                 <div class="form-group">
                     <label>Output</label>
                     <select id="rpt-output">
-                        <option value="widget" ${r.Output === "widget" ? "selected" : ""}>Widget (screen)</option>
-                        <option value="print" ${r.Output === "print" ? "selected" : ""}>Print (paper)</option>
+                        <option value="screen" ${r.Output === "screen" ? "selected" : ""}>Screen</option>
+                        <option value="print" ${r.Output === "print" ? "selected" : ""}>Print</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -207,7 +223,7 @@
 
             <div class="btn-row">
                 <button class="btn btn-secondary" onclick="generatePrompt()">📋 Generate AI Prompt</button>
-                ${isEdit ? `<button class="btn btn-danger" onclick="switchTab('edit')">Cancel Edit</button>` : ""}
+                ${isEdit ? `<button class="btn btn-danger" onclick="switchTab('edit')">Cancel</button>` : ""}
             </div>
 
             <div id="prompt-output" style="margin-top: 20px; display: none;">
@@ -231,7 +247,8 @@
                 </div>
                 <div class="btn-row">
                     <button class="btn btn-primary" onclick="previewReport()">👁 Preview</button>
-                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"})">💾 Save Report</button>
+                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"}, false)">💾 Save${isEdit ? "" : " Report"}</button>
+                    ${isEdit ? `<button class="btn" onclick="saveReport(${r.id}, true)">💾 Save as New Version</button>` : ""}
                 </div>
             </div>
 
@@ -378,7 +395,7 @@ FORMATTING HELPERS (inline, return text):
   {{currency value "GBP"}} — £1,234.56 (supports any ISO currency code)
   {{timeAgo timestamp}} — "3 days ago", "2 months ago"
 
-${output === "widget" ? `STYLE GUIDE:
+${output === "screen" ? `STYLE GUIDE:
 - Professional, clean, modern. Think Power BI / executive dashboard.
 - Use KPI cards (big number + label) for summary metrics.
 - Use colour-coded badges/pills for status fields.
@@ -408,7 +425,7 @@ ${output === "print" ? `\nOUTPUT: PRINT (PAPER)
 - Tables should be full-width with thin borders.
 - Charts should be small (max 300px height) and positioned inline.
 - Do NOT use box-shadow, border-radius, or gradients.
-- Include a header with report title and date, and a footer with page context.` : `\nOUTPUT: WIDGET (SCREEN)
+- Include a header with report title and date, and a footer with page context.` : `\nOUTPUT: SCREEN
 - Design for screen display inside a Grist widget.
 - Use CSS Grid for dashboard layouts with cards.
 - Use generous padding, rounded corners, subtle shadows.
@@ -520,7 +537,7 @@ WHEN GENERATING:
     }
 
     // ── Save Report ────────────────────────────────────────────────────────
-    window.saveReport = async (existingId) => {
+    window.saveReport = async (existingId, asNewVersion) => {
         const name = document.getElementById("rpt-name").value.trim();
         const desc = document.getElementById("rpt-desc").value.trim();
         const linkTable = document.getElementById("rpt-link").value;
@@ -535,51 +552,45 @@ WHEN GENERATING:
         if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
 
         try {
-            if (existingId) {
-                // Versioning: name is already incremented from editReport()
-                // Deactivate the old version
-                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, { Active: false }]]);
+            const fields = {
+                Report_Name: name,
+                Description: desc,
+                Link_Table: linkTable,
+                Data_Tables: dataTables,
+                Filter_Mode: mode,
+                Output: output,
+                Template_HTML: templateHTML,
+                Filters: filters,
+                Report_Requirements: requirements,
+                Active: true
+            };
 
-                // Create new version
-                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, {
-                    Report_Name: name,
-                    Description: desc,
-                    Link_Table: linkTable,
-                    Data_Tables: dataTables,
-                    Filter_Mode: mode,
-                    Output: output,
-                    Template_HTML: templateHTML,
-                    Filters: filters,
-                    Report_Requirements: requirements,
-                    Active: true
-                }]]);
+            if (existingId && !asNewVersion) {
+                // Update in place
+                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, fields]]);
+            } else if (existingId && asNewVersion) {
+                // Deactivate old, create new version
+                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, { Active: false }]]);
+                // Increment version in name
+                let versionName = name;
+                const versionMatch = name.match(/- Version (\d+)$/);
+                if (versionMatch) {
+                    versionName = name.replace(/- Version \d+$/, "- Version " + (parseInt(versionMatch[1]) + 1));
+                } else {
+                    versionName = name + " - Version 2";
+                }
+                fields.Report_Name = versionName;
+                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
             } else {
                 // Brand new report
-                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, {
-                    Report_Name: name,
-                    Description: desc,
-                    Link_Table: linkTable,
-                    Data_Tables: dataTables,
-                    Filter_Mode: mode,
-                    Output: output,
-                    Template_HTML: templateHTML,
-                    Filters: filters,
-                    Report_Requirements: requirements,
-                    Active: true
-                }]]);
+                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
             }
 
             // Refresh reports list
             reports = await fetchTable(REPORTS_TABLE);
             reports = reports.filter(r => r.Active === true);
 
-            // Show saved confirmation
-            app.innerHTML = `<div style="text-align:center; padding:60px 20px;">
-                <div style="font-size:48px; margin-bottom:16px;">✅</div>
-                <h2 style="font-size:18px; color:#16b378; margin-bottom:8px;">Report Saved!</h2>
-                <p style="font-size:13px; color:#666;">"${name}" has been saved to ${REPORTS_TABLE}.</p>
-                <button class="btn btn-primary" onclick="switchTab('create')" style="margin-top:20px;">← Back to Builder</button>
-            </div>`;
+            showStatus('"' + (fields.Report_Name || name) + '" saved successfully.', "success");
         } catch(e) {
             showStatus("Save failed: " + e.message, "error");
         }
@@ -602,22 +613,14 @@ WHEN GENERATING:
     window.editReport = (id) => {
         const report = reports.find(r => r.id === id);
         if (!report) return;
-        // Increment version in the name for the new copy
-        const editCopy = { ...report };
-        const versionMatch = editCopy.Report_Name.match(/- Version (\d+)$/);
-        if (versionMatch) {
-            editCopy.Report_Name = editCopy.Report_Name.replace(/- Version \d+$/, `- Version ${parseInt(versionMatch[1]) + 1}`);
-        } else {
-            editCopy.Report_Name = editCopy.Report_Name + " - Version 2";
-        }
-        // Switch to create tab but relabel it as "Edit"
+        // Load report into form as-is (no version increment)
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
         const createTab = document.querySelector('.tab[onclick*="create"]');
         createTab.textContent = "Edit Report";
         createTab.classList.add("active");
         document.getElementById("panel-create").classList.add("active");
-        renderCreatePanel(editCopy);
+        renderCreatePanel(report);
     };
 
     // ── Schema Panel ────────────────────────────────────────────────────────
@@ -643,56 +646,18 @@ WHEN GENERATING:
         }
     }
 
-    // ── Import Panel ──────────────────────────────────────────────────────
-    function renderImportPanel() {
-        document.getElementById("panel-import").innerHTML = `
-            <div id="import-status"></div>
-            <p style="font-size:12px; color:#666; margin-bottom:16px;">Paste a markdown table spec to create a report record, or copy the template structure to give to an AI so it can generate one for you.</p>
-
-            <div class="btn-row" style="margin-bottom:20px;">
-                <button class="btn btn-secondary" onclick="copySpecStructure()">📋 Copy Spec Structure (for AI)</button>
-            </div>
-
-            <div class="form-group">
-                <label>Paste Report Spec (markdown table)</label>
-                <textarea id="import-spec" style="min-height:200px; font-family: 'SF Mono', 'Fira Code', monospace; font-size:11px;" placeholder="| Field | Value |
-|-------|-------|
-| Report_Name | My Report |
-| Description | What it does |
-| Link_Table | Contacts |
-| Data_Tables | Contacts,Deals |
-| Filter_Mode | all |
-| Filters | |
-| Report_Requirements | KPI cards, bar chart, table... |"></textarea>
-                <div class="hint">Accepts the | Field | Value | table format. Backtick-wrapped JSON is auto-unwrapped.</div>
-            </div>
-
-            <div class="btn-row">
-                <button class="btn btn-primary" onclick="importSpec()">📥 Import & Create Report</button>
-                <button class="btn" onclick="previewImport()">👁 Preview Parse</button>
-            </div>
-
-            <div id="import-preview" style="margin-top:16px; display:none;">
-                <label style="font-size:11px; font-weight:600; color:#555; text-transform:uppercase; margin-bottom:8px; display:block;">Parsed Fields</label>
-                <div id="import-preview-content" style="background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:12px; font-size:11px;"></div>
-            </div>
-        `;
-    }
-
+    // ── Import Spec Utilities ──────────────────────────────────────────────
     function parseSpecTable(text) {
         const lines = text.trim().split("\n").filter(l => l.trim().startsWith("|"));
         if (lines.length < 2) return null;
         const result = {};
-        // Skip header and separator rows
         const dataLines = lines.filter(l => !l.match(/^\|\s*[-:]+/));
-        // First line is header, rest are data
         const rows = dataLines.slice(1);
         rows.forEach(line => {
             const cells = line.split("|").map(c => c.trim()).filter(Boolean);
             if (cells.length >= 2) {
                 let field = cells[0].trim();
-                let value = cells.slice(1).join("|").trim(); // rejoin in case value contains pipes
-                // Unwrap backticks
+                let value = cells.slice(1).join("|").trim();
                 value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
                 result[field] = value;
             }
@@ -724,10 +689,7 @@ WHEN GENERATING:
     window.previewImport = () => {
         const text = document.getElementById("import-spec").value;
         const parsed = parseSpecTable(text);
-        if (!parsed) {
-            showImportStatus("Could not parse. Ensure it's a | Field | Value | markdown table.", "error");
-            return;
-        }
+        if (!parsed) { showStatus("Could not parse. Ensure it's a | Field | Value | markdown table.", "error"); return; }
         const record = normalizeSpec(parsed);
         let html = "<table class='schema-table'><tr><th>Column</th><th>Value</th></tr>";
         for (const [k, v] of Object.entries(record)) {
@@ -740,38 +702,28 @@ WHEN GENERATING:
         document.getElementById("import-preview").style.display = "block";
     };
 
-    window.importSpec = async () => {
+    window.importSpecToForm = () => {
         const text = document.getElementById("import-spec").value;
         const parsed = parseSpecTable(text);
-        if (!parsed) { showImportStatus("Could not parse the markdown table.", "error"); return; }
+        if (!parsed) { showStatus("Could not parse the markdown table.", "error"); return; }
         const record = normalizeSpec(parsed);
-        if (!record.Report_Name) { showImportStatus("Report_Name is required.", "error"); return; }
+        if (!record.Report_Name) { showStatus("Report_Name is required in the spec.", "error"); return; }
 
-        try {
-            const fields = {
-                Report_Name: record.Report_Name || "",
-                Description: record.Description || "",
-                Link_Table: record.Link_Table || "",
-                Data_Tables: record.Data_Tables || "",
-                Filter_Mode: record.Filter_Mode || "all",
-                Output: record.Output || "widget",
-                Template_HTML: record.Template_HTML || "",
-                Filters: record.Filters || "",
-                Report_Requirements: record.Report_Requirements || "",
-                Active: true
-            };
-            await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
+        // Populate form fields
+        if (record.Report_Name) document.getElementById("rpt-name").value = record.Report_Name;
+        if (record.Description) document.getElementById("rpt-desc").value = record.Description;
+        if (record.Link_Table) document.getElementById("rpt-link").value = record.Link_Table;
+        if (record.Data_Tables) document.getElementById("rpt-data").value = record.Data_Tables;
+        if (record.Filter_Mode) document.getElementById("rpt-mode").value = record.Filter_Mode;
+        if (record.Output) document.getElementById("rpt-output").value = record.Output;
+        if (record.Report_Requirements) document.getElementById("rpt-request").value = record.Report_Requirements;
+        if (record.Filters) document.getElementById("rpt-filters").value = record.Filters;
+        if (record.Template_HTML) document.getElementById("rpt-template").value = record.Template_HTML;
 
-            // Refresh reports
-            reports = await fetchTable(REPORTS_TABLE);
-            reports = reports.filter(r => r.Active === true);
-
-            showImportStatus('✅ "' + record.Report_Name + '" created in ' + REPORTS_TABLE + '. Switch to Edit Existing tab to generate the AI prompt.', "success");
-            document.getElementById("import-spec").value = "";
-            document.getElementById("import-preview").style.display = "none";
-        } catch(e) {
-            showImportStatus("Import failed: " + e.message, "error");
-        }
+        // Clear the import area and show success
+        document.getElementById("import-spec").value = "";
+        document.getElementById("import-preview").style.display = "none";
+        showStatus("Spec imported to form. Review the fields below, then Generate AI Prompt or Save.", "success");
     };
 
     window.copySpecStructure = () => {
@@ -781,20 +733,12 @@ WHEN GENERATING:
             schemaText += "\nTable: " + tableName + "\nColumns: " + tableInfo.columns.map(c => c.name + " (" + c.type + ")").join(", ") + "\n";
         }
 
-        const structure = 'You are helping me define a report specification for a Grist spreadsheet reporting system.\n\nGenerate a report spec in this EXACT markdown table format:\n\n| Field | Value |\n|-------|-------|\n| Report_Name | (descriptive name) |\n| Description | (one-line summary) |\n| Link_Table | (which table page this report appears on) |\n| Data_Tables | (comma-separated list of tables the report needs) |\n| Filter_Mode | (one of: all, record, filtered) |\n| Output | (one of: widget, print) |\n| Filters | (JSON array of filter definitions, or empty) |\n| Report_Requirements | (detailed description of what the report should show — KPIs, charts, tables, layout, styling) |\n\nFILTER MODES:\n- "all" — shows all data, no filter popup\n- "record" — shows data for the currently selected record (linked widget)\n- "filtered" — shows a filter popup before rendering\n\nFILTER TYPES (for Filter_Mode "filtered"):\n- Choice: {"field":"FieldName","label":"Display Label","type":"choice","table":"TableName"}\n- Date range: {"field":"FieldName","label":"Display Label","type":"date-range","table":"TableName"}\n- Number range: {"field":"FieldName","label":"Display Label","type":"number-range","table":"TableName"}\n- Text search: {"field":"FieldName","label":"Display Label","type":"text","table":"TableName"}\n- Boolean: {"field":"FieldName","label":"Display Label","type":"boolean","table":"TableName"}\n\nAVAILABLE FEATURES (mention in Report_Requirements if needed):\n- KPI cards (big number + label)\n- Charts: bar, line, pie, doughnut, radar, polarArea (via data attributes)\n- Maps with clustering or heatmap (requires Latitude/Longitude columns)\n- QR codes, barcodes\n- Progress bars, star ratings, colour-coded badges\n- Grouped tables, sorted tables\n- Multi-column layouts, mailing labels\n- Print page breaks\n\nDATABASE SCHEMA:\nAvailable tables: ' + tableList + '\n' + schemaText + '\nOUTPUT RULES:\n- Output ONLY the markdown table — no explanation, no commentary.\n- Wrap JSON values in backticks.\n- Report_Requirements should be detailed enough for a designer to build the template (mention specific fields, chart types, grouping, colour schemes).\n';
+        const structure = 'You are helping me define a report specification for a Grist spreadsheet reporting system.\n\nGenerate a report spec in this EXACT markdown table format:\n\n| Field | Value |\n|-------|-------|\n| Report_Name | (descriptive name) |\n| Description | (one-line summary) |\n| Link_Table | (which table page this report appears on) |\n| Data_Tables | (comma-separated list of tables the report needs) |\n| Filter_Mode | (one of: all, record, filtered) |\n| Output | (one of: screen, print) |\n| Filters | (JSON array of filter definitions, or empty) |\n| Report_Requirements | (detailed description of what the report should show — KPIs, charts, tables, layout, styling) |\n\nFILTER MODES:\n- "all" — shows all data, no filter popup\n- "record" — shows data for the currently selected record (linked widget)\n- "filtered" — shows a filter popup before rendering\n\nFILTER TYPES (for Filter_Mode "filtered"):\n- Choice: {"field":"FieldName","label":"Display Label","type":"choice","table":"TableName"}\n- Date range: {"field":"FieldName","label":"Display Label","type":"date-range","table":"TableName"}\n- Number range: {"field":"FieldName","label":"Display Label","type":"number-range","table":"TableName"}\n- Text search: {"field":"FieldName","label":"Display Label","type":"text","table":"TableName"}\n- Boolean: {"field":"FieldName","label":"Display Label","type":"boolean","table":"TableName"}\n\nAVAILABLE FEATURES (mention in Report_Requirements if needed):\n- KPI cards (big number + label)\n- Charts: bar, line, pie, doughnut, radar, polarArea (via data attributes)\n- Maps with clustering or heatmap (requires Latitude/Longitude columns)\n- QR codes, barcodes\n- Progress bars, star ratings, colour-coded badges\n- Grouped tables, sorted tables\n- Multi-column layouts, mailing labels\n- Print page breaks\n\nDATABASE SCHEMA:\nAvailable tables: ' + tableList + '\n' + schemaText + '\nOUTPUT RULES:\n- Output ONLY the markdown table — no explanation, no commentary.\n- Wrap JSON values in backticks.\n- Report_Requirements should be detailed enough for a designer to build the template (mention specific fields, chart types, grouping, colour schemes).\n';
 
         navigator.clipboard.writeText(structure).then(() => {
-            showImportStatus("Spec structure copied to clipboard! Paste it into your AI chat.", "success");
+            showStatus("Spec structure copied to clipboard! Paste it into your AI chat.", "success");
         });
     };
-
-    function showImportStatus(msg, type) {
-        const area = document.getElementById("import-status");
-        if (area) {
-            area.innerHTML = '<div class="status status-' + type + '">' + msg + '</div>';
-            setTimeout(() => { area.innerHTML = ""; }, 8000);
-        }
-    }
 
     // ── Help Panel ────────────────────────────────────────────────────────
     function renderHelpPanel() {
