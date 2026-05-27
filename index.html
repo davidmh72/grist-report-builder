@@ -1,98 +1,235 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  REPORT BUILDER (report_builder.html)
-  Grist Report Widget — create and edit report templates
-  GitHub repo: grist-report-builder
+  REPORT AI BUILDER (report_ai_builder.html)
+  Grist Report Widget — AI-powered conversational report builder
+  Split layout: Chat (left) + Report Spec (right)
+  Requires: Cloudflare Worker backend for AI generation
   ============================================================
 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grist Report Builder</title>
+    <title>Grist AI Report Builder</title>
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/handlebars@4.7.8/dist/handlebars.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 16px; color: #333; background: #f8f9fa; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f8f9fa; color: #333; overflow: hidden; }
 
-        .builder { max-width: 800px; margin: 0 auto; }
-        .builder h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #264653; }
-        .builder .subtitle { font-size: 12px; color: #888; margin-bottom: 20px; }
+        /* Header */
+        .header { padding: 10px 16px; border-bottom: 1px solid #eee; background: #fff; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .header h1 { font-size: 15px; font-weight: 700; color: #264653; }
+        .header .badge { font-size: 10px; background: #16b378; color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+        .header .status { margin-left: auto; font-size: 11px; color: #999; }
+        .header .settings-btn { font-size: 11px; color: #16b378; cursor: pointer; padding: 4px 8px; border: 1px solid #d0ebe0; border-radius: 6px; }
+        .header .settings-btn:hover { background: #f0faf6; }
 
-        /* Tabs */
-        .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #eee; }
-        .tab { padding: 10px 20px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; }
-        .tab.active { color: #16b378; border-bottom-color: #16b378; }
-        .tab:hover { color: #333; }
+        /* Progress indicators (inline in header) */
+        .progress-item { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #555; }
+        .progress-item .label { font-weight: 600; white-space: nowrap; }
+        .progress-track { width: 50px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease, background-color 0.4s ease; }
+        .progress-value { font-size: 10px; font-weight: 700; min-width: 24px; }
+        .btn-generate-ready { animation: pulse-green 1.5s infinite; }
+        @keyframes pulse-green { 0%,100% { box-shadow: 0 0 0 0 rgba(22,179,120,0.4); } 50% { box-shadow: 0 0 0 6px rgba(22,179,120,0); } }
 
-        /* Panels */
-        .panel { display: none; }
-        .panel.active { display: block; }
+        /* Settings bar */
+        .settings-bar { padding: 8px 16px; background: #fafafa; border-bottom: 1px solid #eee; display: none; flex-shrink: 0; }
+        .settings-bar.visible { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .settings-bar label { font-size: 10px; font-weight: 600; color: #555; }
+        .settings-bar input, .settings-bar select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; }
+        .settings-bar input[type="password"] { width: 200px; }
+        .settings-bar .sep { width: 1px; height: 20px; background: #ddd; }
 
-        /* Form elements */
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; }
-        .form-group textarea { min-height: 100px; resize: vertical; }
-        .form-group .hint { font-size: 10px; color: #aaa; margin-top: 4px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        /* Main split layout */
+        .main { flex: 1; display: grid; grid-template-columns: 30% 70%; overflow: hidden; }
 
-        /* Prompt output */
-        .prompt-box { background: #1a1a2e; color: #e0e0e0; border-radius: 8px; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto; margin-bottom: 12px; }
-        .template-box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; min-height: 200px; resize: vertical; width: 100%; }
+        /* Left: Chat */
+        .chat-panel { display: flex; flex-direction: column; border-right: 1px solid #eee; background: #fff; min-height: 0; }
+        .chat { flex: 1; overflow-y: scroll; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+        .message { max-width: 90%; padding: 8px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+        .message-ai { background: #f4f4f4; align-self: flex-start; border-bottom-left-radius: 3px; }
+        .message-user { background: #16b378; color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
+        .message-system { background: #e8f5e9; color: #555; align-self: center; font-size: 10px; padding: 4px 10px; border-radius: 6px; }
+        .typing::after { content: "▋"; animation: blink 0.8s infinite; }
+        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+        .chat-input { padding: 8px 12px; border-top: 1px solid #eee; display: flex; gap: 6px; }
+        .chat-input textarea { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: inherit; resize: none; min-height: 36px; max-height: 100px; }
+        .chat-input textarea:focus { outline: none; border-color: #16b378; }
+        .chat-input button { padding: 8px 14px; background: #16b378; color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
+        .chat-input button:hover { background: #12956a; }
+        .chat-input button:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* Buttons */
-        .btn { padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+        /* Right: Report spec */
+        .spec-panel { display: flex; flex-direction: column; overflow-y: auto; padding: 12px 16px; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: inherit; }
+        .form-group textarea { resize: vertical; }
+        .form-group .hint { font-size: 9px; color: #aaa; margin-top: 2px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .template-box { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; min-height: 120px; }
+        .btn { padding: 7px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
         .btn:hover { background: #f0f0f0; }
         .btn-primary { background: #16b378; color: #fff; border-color: #16b378; }
         .btn-primary:hover { background: #12956a; }
-        .btn-secondary { background: #264653; color: #fff; border-color: #264653; }
-        .btn-secondary:hover { background: #1a3540; }
-        .btn-danger { background: #fff; color: #e53935; border-color: #e53935; }
-        .btn-danger:hover { background: #fef0f0; }
-        .btn-row { display: flex; gap: 8px; margin-top: 16px; }
-
-        /* Schema display */
-        .schema-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
-        .schema-table th { background: #264653; color: #fff; padding: 6px 10px; text-align: left; }
-        .schema-table td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; }
-        .schema-table tr:hover td { background: #f8f8f8; }
-
-        /* Preview */
-        .preview-frame { border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fff; min-height: 200px; overflow: auto; }
-
-        /* Status messages */
-        .status { padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; }
+        .btn-ai { background: #264653; color: #fff; border-color: #264653; }
+        .btn-ai:hover { background: #1a3540; }
+        .btn-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+        .status-msg { padding: 6px 10px; border-radius: 6px; font-size: 11px; margin-bottom: 8px; }
         .status-success { background: #e1fede; color: #16b378; }
         .status-error { background: #fef0f0; color: #e53935; }
+        .section-label { font-size: 10px; font-weight: 600; color: #16b378; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 6px; padding-top: 8px; border-top: 1px solid #eee; }
 
-        /* Report list for editing */
-        .report-list { list-style: none; }
-        .report-list li { padding: 10px 14px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .report-list li:hover { border-color: #16b378; background: #f8fdf8; }
-        .report-list .name { font-weight: 600; font-size: 13px; }
-        .report-list .meta { font-size: 11px; color: #888; }
+        /* Preview */
+        .preview-frame { border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #fff; min-height: 100px; overflow: auto; margin-top: 8px; }
+
+        /* Responsive: stack on narrow */
+        @media (max-width: 700px) {
+            .main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+        }
     </style>
 </head>
 <body>
-<div class="builder">
-    <h1>Report Builder</h1>
-    <div class="subtitle">Create and edit report templates with AI assistance — v1.4.0</div>
+<div class="header">
+    <h1>AI Report Builder</h1>
+    <span class="badge">Beta</span>
+    <select id="cfg-model" style="font-size:10px; padding:3px 6px; border:1px solid #ddd; border-radius:4px; margin-left:8px;">
+        <option value="gemini-2.5-flash-lite">2.5 Flash-Lite ($0.001/rpt)</option>
+        <option value="gemini-2.5-flash" selected>2.5 Flash ($0.002/rpt)</option>
+        <option value="gemini-3.1-flash-lite-preview">3.1 Flash-Lite ($0.004/rpt)</option>
+        <option value="gemini-2.5-pro">2.5 Pro ($0.025/rpt)</option>
+        <option value="gemini-3.5-flash">3.5 Flash ($0.023/rpt)</option>
+        <option value="gemini-3.1-pro-preview">3.1 Pro ($0.030/rpt)</option>
+    </select>
+    <button onclick="checkModel()" style="font-size:10px; padding:3px 8px; border:1px solid #d0ebe0; border-radius:4px; background:#f0faf6; cursor:pointer; margin-left:4px;">🎯 Check Model</button>
+    <span class="progress-item" style="margin-left:8px;">
+        <span class="label">Ready:</span>
+        <span class="progress-track"><span class="progress-fill" id="readiness-fill" style="width:0%; background:#e53935;"></span></span>
+        <span class="progress-value" id="readiness-value">0%</span>
+    </span>
+    <span class="progress-item">
+        <span class="label">Complexity:</span>
+        <span class="progress-track"><span class="progress-fill" id="complexity-fill" style="width:0%; background:#f9a825;"></span></span>
+        <span class="progress-value" id="complexity-value">0/10</span>
+    </span>
+    <span class="status" id="connection-status">Connecting...</span>
+    <span class="settings-btn" onclick="toggleSettings()">⚙️ Settings</span>
+</div>
 
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('create')">New Report</div>
-        <div class="tab" onclick="switchTab('edit')">Edit Existing</div>
-        <div class="tab" onclick="switchTab('schema')">Schema Reference</div>
-        <div class="tab" onclick="switchTab('help')">Help & Features</div>
+<div class="settings-bar" id="settings-bar">
+    <label>API Endpoint:</label>
+    <input type="text" id="cfg-endpoint" placeholder="https://your-worker.workers.dev" style="width:260px;">
+    <span class="sep"></span>
+    <label>Gemini Key:</label>
+    <input type="password" id="cfg-token" placeholder="Stored in this browser only">
+    <span class="sep"></span>
+    <button class="btn" onclick="saveSettings()" style="padding:4px 10px; font-size:10px;">💾 Save</button>
+    <span class="sep"></span>
+    <label><input type="checkbox" id="cfg-transparency"> Show outgoing data</label>
+    <span style="margin-left:auto; font-size:9px; color:#999;">Settings saved in browser localStorage (never sent to server)</span>
+</div>
+
+
+
+<div class="main">
+    <!-- LEFT: Chat -->
+    <div class="chat-panel">
+        <div class="chat" id="chat"></div>
+        <div class="chat-input">
+            <textarea id="user-input" placeholder="Describe your report idea..." rows="1" onkeydown="handleKey(event)"></textarea>
+            <button id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
     </div>
 
-    <div id="panel-create" class="panel active"></div>
-    <div id="panel-edit" class="panel"></div>
-    <div id="panel-schema" class="panel"></div>
-    <div id="panel-help" class="panel"></div>
+    <!-- RIGHT: Report Spec -->
+    <div class="spec-panel" id="spec-panel">
+        <div id="status-area"></div>
+
+        <!-- Edit Existing Report -->
+        <div class="form-group" style="margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #eee;">
+            <label>Edit Existing Report</label>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <select id="edit-existing-select" style="flex:1;">
+                    <option value="">— New Report —</option>
+                </select>
+                <button class="btn" onclick="loadExistingReport()" style="padding:5px 10px; font-size:10px;">Load</button>
+            </div>
+            <div class="hint">Select a report from SysReports to edit it in place</div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Report Name</label>
+                <input type="text" id="rpt-name" placeholder="e.g. Sales Pipeline Dashboard">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="rpt-desc" placeholder="Brief summary">
+            </div>
+        </div>
+
+        <div class="form-row-3">
+            <div class="form-group">
+                <label>Link Table</label>
+                <select id="rpt-link"><option value="">--</option></select>
+            </div>
+            <div class="form-group">
+                <label>Filter Mode</label>
+                <select id="rpt-mode">
+                    <option value="all">All</option>
+                    <option value="record">Record</option>
+                    <option value="filtered">Filtered</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Output</label>
+                <select id="rpt-output">
+                    <option value="screen">Screen</option>
+                    <option value="print">Print</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Data Tables (comma-separated)</label>
+            <input type="text" id="rpt-data" placeholder="e.g. Contacts,Deals,Tasks">
+        </div>
+
+        <div class="section-label">Requirements (refined by AI)</div>
+        <div class="form-group">
+            <textarea id="rpt-requirements" style="min-height:80px;" placeholder="The AI will help you build this..."></textarea>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-ai" onclick="generateTemplate()">🤖 Generate Template</button>
+            <button class="btn" onclick="previewReport()">👁 Preview</button>
+        </div>
+
+        <div class="section-label">Template HTML</div>
+        <div class="form-group">
+            <textarea class="template-box" id="rpt-template" placeholder="AI-generated template appears here..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Filters JSON (optional)</label>
+            <textarea id="rpt-filters" style="min-height:40px; font-family:monospace; font-size:10px;" placeholder='[{"field":"Status","type":"choice","table":"Contacts"}]'></textarea>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveReport()">💾 Save Report</button>
+            <button class="btn" id="btn-save-new-version" onclick="saveAsNewVersion()" style="display:none;">📋 Save as New Version</button>
+        </div>
+
+        <div id="preview-area" style="display:none;">
+            <div class="section-label">Preview</div>
+            <div class="preview-frame" id="preview-frame"></div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -100,6 +237,16 @@
     "use strict";
 
     const REPORTS_TABLE = "SysReports";
+    const DEFAULT_ENDPOINT = "https://jolly-meadow-623d.david-m-hawley.workers.dev/";
+
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+    const statusEl = document.getElementById("connection-status");
+
+    let schema = {};
+    let conversation = [];
+    let generating = false;
 
     // ── Grist Plugin API ──────────────────────────────────────────────────
     grist.ready({ requiredAccess: "full", columns: [] });
@@ -121,843 +268,536 @@
     async function getSchema() {
         const tables = await fetchTable("_grist_Tables");
         const columns = await fetchTable("_grist_Tables_column");
-        const schema = {};
+        const s = {};
         tables.forEach(t => {
             if (t.tableId && !t.tableId.startsWith("_grist") && !t.tableId.startsWith("GristHidden")) {
-                schema[t.tableId] = { id: t.id, columns: [] };
+                s[t.tableId] = { id: t.id, columns: [] };
             }
         });
         columns.forEach(c => {
             const table = tables.find(t => t.id === c.parentId);
-            if (table && schema[table.tableId] && c.colId && !c.colId.startsWith("gristHelper")) {
-                schema[table.tableId].columns.push({ name: c.colId, type: c.type, label: c.label || c.colId });
+            if (table && s[table.tableId] && c.colId && !c.colId.startsWith("gristHelper")) {
+                s[table.tableId].columns.push({ name: c.colId, type: c.type, label: c.label || c.colId });
             }
         });
-        return schema;
+        return s;
     }
 
-    let schema = {};
-    let reports = [];
-
-    // ── Tab switching ────────────────────────────────────────────────────
-    window.switchTab = (tab) => {
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        document.querySelector('.tab[onclick*="create"]').textContent = "New Report";
-        document.querySelector(`.tab[onclick*="${tab}"]`).classList.add("active");
-        document.getElementById(`panel-${tab}`).classList.add("active");
-        if (tab === "create") renderCreatePanel();
-        if (tab === "edit") renderEditPanel();
-        if (tab === "schema") renderSchemaPanel();
-        if (tab === "help") renderHelpPanel();
-    };
-
-    // ── Create Panel ──────────────────────────────────────────────────────
-    function renderCreatePanel(existingReport) {
-        const tableOptions = Object.keys(schema).map(t => `<option value="${t}">${t}</option>`).join("");
-        const isEdit = !!existingReport;
-        const r = existingReport || {};
-
-        document.getElementById("panel-create").innerHTML = `
-            <div id="status-area"></div>
-
-            ${!isEdit ? `<div style="background:#f0faf6; border:1px solid #d0ebe0; border-radius:8px; padding:14px 16px; margin-bottom:20px;">
-                <div style="font-size:12px; font-weight:600; color:#16b378; margin-bottom:8px;">⚡ Quick Start (AI-assisted)</div>
-                <div class="btn-row" style="margin-bottom:10px;">
-                    <button class="btn btn-secondary" onclick="copySpecStructure()">📋 Copy Schema Prompt for AI</button>
-                </div>
-                <div class="form-group" style="margin-bottom:8px;">
-                    <label style="margin-bottom:4px;">Paste AI-generated spec here</label>
-                    <textarea id="import-spec" style="min-height:80px; font-family: 'SF Mono', 'Fira Code', monospace; font-size:11px;" placeholder="| Field | Value |&#10;|-------|-------|&#10;| Report_Name | My Report |&#10;| Data_Tables | Contacts,Deals |&#10;| Filter_Mode | all |&#10;| Report_Requirements | ... |"></textarea>
-                </div>
-                <div class="btn-row">
-                    <button class="btn btn-primary" onclick="importSpecToForm()">📥 Import Spec to Form</button>
-                    <button class="btn" onclick="previewImport()">👁 Preview Parse</button>
-                </div>
-                <div id="import-preview" style="margin-top:10px; display:none;">
-                    <div id="import-preview-content" style="background:#fff; border:1px solid #eee; border-radius:6px; padding:10px; font-size:11px;"></div>
-                </div>
-            </div>
-            <div style="text-align:center; color:#bbb; font-size:11px; margin-bottom:16px;">── or fill in manually ──</div>` : ""}
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Report Name</label>
-                    <input type="text" id="rpt-name" value="${r.Report_Name || ""}" placeholder="e.g. Contact Activity Dashboard">
-                </div>
-                <div class="form-group">
-                    <label>Filter Mode</label>
-                    <select id="rpt-mode">
-                        <option value="all" ${r.Filter_Mode === "all" ? "selected" : ""}>All (no filter)</option>
-                        <option value="record" ${r.Filter_Mode === "record" ? "selected" : ""}>Record (selected record)</option>
-                        <option value="filtered" ${r.Filter_Mode === "filtered" ? "selected" : ""}>Filtered (popup)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Output</label>
-                    <select id="rpt-output">
-                        <option value="screen" ${r.Output === "screen" ? "selected" : ""}>Screen</option>
-                        <option value="print" ${r.Output === "print" ? "selected" : ""}>Print</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Link Table (which page it appears on)</label>
-                    <select id="rpt-link"><option value="">-- Select --</option>${tableOptions}</select>
-                </div>
-                <div class="form-group">
-                    <label>Data Tables (comma-separated)</label>
-                    <input type="text" id="rpt-data" value="${r.Data_Tables || ""}" placeholder="e.g. Contacts,OrganisationContacts">
-                    <div class="hint">All tables the report needs data from</div>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Description</label>
-                <input type="text" id="rpt-desc" value="${r.Description || ""}" placeholder="Brief description of what this report shows">
-            </div>
-            <div class="form-group">
-                <label>Report Requirements (saved for future editing)</label>
-                <textarea id="rpt-request" placeholder="e.g. A dashboard with KPI cards showing total contacts, active vs inactive. Bar chart of contacts by country. Table listing all contacts with name, email, status, and last updated date. Use a dark header theme.">${r.Report_Requirements || ""}</textarea>
-            </div>
-
-            <div class="btn-row">
-                <button class="btn btn-secondary" onclick="generatePrompt()">📋 Generate AI Prompt</button>
-                ${isEdit ? `<button class="btn btn-danger" onclick="switchTab('edit')">Cancel</button>` : ""}
-            </div>
-
-            <div id="prompt-output" style="margin-top: 20px; display: none;">
-                <div class="form-group">
-                    <label>AI Prompt (copy this to ChatGPT/Claude)</label>
-                    <div class="prompt-box" id="prompt-text"></div>
-                    <div class="btn-row">
-                        <button class="btn" onclick="copyPrompt()">📋 Copy to Clipboard</button>
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-top: 24px;">
-                <div class="form-group">
-                    <label>Template HTML (paste AI output here)</label>
-                    <textarea class="template-box" id="rpt-template" placeholder="Paste the HTML template from the AI here...">${r.Template_HTML || ""}</textarea>
-                </div>
-                <div class="form-group">
-                    <label>Filters JSON (optional, for filtered mode)</label>
-                    <textarea id="rpt-filters" style="min-height: 60px; font-family: monospace; font-size: 11px;" placeholder='[{"field":"Status","label":"Status","type":"choice","table":"Contacts"}]'>${r.Filters || ""}</textarea>
-                </div>
-                <div class="btn-row">
-                    <button class="btn btn-primary" onclick="previewReport()">👁 Preview</button>
-                    <button class="btn btn-primary" onclick="saveReport(${isEdit ? r.id : "null"}, false)">💾 Save${isEdit ? "" : " Report"}</button>
-                    ${isEdit ? `<button class="btn" onclick="saveReport(${r.id}, true)">💾 Save as New Version</button>` : ""}
-                </div>
-            </div>
-
-            <div id="preview-area" style="margin-top: 20px; display: none;">
-                <label style="font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; margin-bottom: 8px; display: block;">Preview</label>
-                <div class="preview-frame" id="preview-frame"></div>
-            </div>
-        `;
-
-        if (r.Link_Table) document.getElementById("rpt-link").value = r.Link_Table;
+    function getSchemaText() {
+        let text = "";
+        for (const [tableName, tableInfo] of Object.entries(schema)) {
+            text += "Table: " + tableName + "\nColumns: " + tableInfo.columns.map(c => c.name + " (" + c.type + ")").join(", ") + "\n\n";
+        }
+        return text;
     }
 
-    // ── Prompt Generator ────────────────────────────────────────────────────
-    window.generatePrompt = () => {
-        const linkTable = document.getElementById("rpt-link").value;
-        const dataTables = document.getElementById("rpt-data").value || linkTable;
-        const request = document.getElementById("rpt-request").value;
+    // ── Complexity Scoring ───────────────────────────────────────────────
+    function calculateComplexityScore() {
+        const requirements = document.getElementById("rpt-requirements").value.toLowerCase();
+        const dataTables = document.getElementById("rpt-data").value.split(",").filter(t => t.trim()).length;
         const mode = document.getElementById("rpt-mode").value;
         const output = document.getElementById("rpt-output").value;
 
-        const tables = dataTables.split(",").map(t => t.trim()).filter(Boolean);
-        let schemaText = "";
-        tables.forEach(t => {
-            if (schema[t]) {
-                schemaText += `\nTable: ${t}\nColumns:\n`;
-                schema[t].columns.forEach(c => {
-                    schemaText += `  - ${c.name} (${c.type})${c.label !== c.name ? ` [label: "${c.label}"]` : ""}\n`;
-                });
-            }
-        });
+        let score = 0;
+        score += Math.min(dataTables * 1.5, 4);
+        score += mode === "record" ? 2 : 0;
+        score += mode === "filtered" ? 1 : 0;
+        score += output === "print" ? 1 : 0;
+        score += (requirements.match(/chart|graph|pie|doughnut|bar|line|radar/g) || []).length * 1.5;
+        score += (requirements.match(/map|cluster|heat|geographic/g) || []).length * 2;
+        score += (requirements.match(/group|subtotal|nested|hierarchy/g) || []).length * 1.5;
+        score += (requirements.match(/conditional|colour.coded|badge|progress/g) || []).length;
+        score += (requirements.match(/multi.dataset|stacked|dual.axis|side.by.side/g) || []).length * 2;
+        score += Math.floor(requirements.split(" ").length / 50);
+        score = Math.min(Math.round(score), 10);
+        return score;
+    }
 
-        const prompt = `You are a report template designer for a Grist spreadsheet reporting system.
+    function getModelForScore(score) {
+        if (score <= 3) return "gemini-2.5-flash-lite";
+        if (score <= 5) return "gemini-2.5-flash";
+        if (score <= 7) return "gemini-2.5-pro";
+        return "gemini-3.5-flash";
+    }
 
-Generate a complete HTML template (HTML + inline CSS + Handlebars placeholders) for the following report.
-
-OUTPUT RULES:
-- Output the HTML inside a single code block (triple backticks with \`\`\`html language tag).
-- The code must be properly indented (2-space indentation) for readability.
-- Start the code with <style> and end with the final </div>.
-- Do NOT output any text, explanation, or commentary outside the code block.
-- Use a <style> block for all CSS. Use CSS Grid for dashboard layouts.
-- Include @media print { } rules for clean PDF output (hide non-essential elements, avoid page-break inside cards).
-- ABSOLUTELY NO <script> TAGS OR JAVASCRIPT. The template is injected via innerHTML which does not execute scripts. All interactivity is handled by declarative data attributes (see VISUAL ELEMENTS below).
-- Do NOT use DOMContentLoaded, window.onload, setTimeout, or any JS initialisation code.
-
-DATA STRUCTURE:
-- Data is an object where each table name is a key containing an array of row objects.
-- Access: {{#each ${tables[0]}}}{{field_name}}{{/${tables[0]}}}
-- The first table in the list is the primary table.
-- data-chart-group auto-counts occurrences — no need to pre-aggregate data. Add data-chart-value="Field" to sum that field instead of counting.
-- Every row has an "id" field (numeric record ID) accessible as {{id}}.
-- Reference columns (Ref fields) store the numeric ID of the referenced record, NOT the display name.
-- Always handle empty tables gracefully: use {{#each Table}}...{{else}}<p>No records found</p>{{/each}} for linked/secondary tables to avoid rendering empty headers or broken layouts.
-- Always wrap Date-type columns in {{formatDate field}} or {{formatDateTime field}}, and monetary Numeric fields in {{currency field "GBP"}} or {{formatNumber field}}.
-
-CRITICAL — HOW RECORD MODE WORKS:
-- In "record" mode, the widget has ALREADY filtered all data for you:
-  - The primary table contains ONLY the selected record (1 row)
-  - All other tables listed in Data_Tables are ALREADY filtered to only rows related to that record
-- You do NOT need to manually filter linked tables in the template
-- Simply loop over each table directly: {{#each TableName}}...{{/each}} — the data is already correct
-- Do NOT use {{#if (eq SomeRef ../id)}} or any manual filtering logic — the widget handles this automatically
-- Do NOT try to match records by name, email, ID, or any field — all filtering is pre-done
-
-CRITICAL — HOW ALL/FILTERED MODE WORKS:
-- All tables contain their full (or user-filtered) dataset
-- Loop over them directly: {{#each Contacts}}...{{/each}}
-- For linked table data within a loop, you CANNOT access other tables from inside {{#each}}
-- Use {{#groupBy}} or {{#filterBy}} on the same table, not cross-table lookups
-- Charts handle cross-table automatically via data-chart-table attribute
-
-SCOPE RULES:
-- Inside {{#each Contacts}}, access fields directly: {{First_Name}}, {{Email}}
-- To access the root data from inside a loop, use @root: {{@root.Deals}}, {{count @root.Tasks}}
-- To access parent context, use ../: {{../someValue}}
-- {{@index}} gives the current loop index (0-based)
-
-HANDLEBARS HELPERS:
-  BLOCK helpers (use {{#helper}}...{{/helper}}, render inner content):
-    {{#each arr}}...{{/each}} — loop over array
-    {{#if condition}}...{{/if}} — conditional block
-    {{#groupBy arr "field"}}...{{/groupBy}} — groups rows, provides {{key}}, {{items}}, {{count}}
-    {{#filterBy arr "field" "value"}}...{{/filterBy}} — filters rows, provides {{items}}, {{count}}
-    {{#columns N}}...{{/columns}} — multi-column CSS layout
-    {{#monthGrid year month}}{{#each days}}...{{/each}}{{/monthGrid}} — calendar grid
-
-  INLINE helpers (use {{helper args}}, return a value directly):
-    {{count arr}} — array length (number)
-    {{sum arr "field"}} — sum of numeric field
-    {{avg arr "field"}} — average
-    {{max arr "field"}} — maximum
-    {{min arr "field"}} — minimum
-    {{percent a b}} — percentage string "45.2%"
-    {{round n 2}} — round to N decimals
-    {{add a b}}, {{subtract a b}}, {{multiply a b}}, {{divide a b}} — arithmetic
-    {{formatDate field}} — format epoch seconds to "25 May 2025"
-    {{formatDateTime field}} — "25 May 2025 14:30"
-    {{now}} — current date as formatted string (NOT a timestamp — do not pass to formatDate)
-    {{year field}}, {{month field}}, {{dayOfWeek field}} — extract date parts
-    {{monthName 5}} — "June"
-    {{uppercase str}}, {{lowercase str}}, {{truncate str 20}}, {{replace str "old" "new"}}
-    {{eq a b}}, {{neq a b}}, {{gt a b}}, {{lt a b}}, {{gte a b}}, {{lte a b}} — return true/false
-    {{and a b}}, {{or a b}}, {{not a}} — logic
-    {{pageBreak}} — insert print page break
-    {{unique arr "field"}} — returns array of unique values
-    {{chartConfig "type" arr "groupField" "metrics" "title"}} — returns full Chart.js JSON config (use inside data-chart attribute)
-    {{groupCount arr "field"}} — returns object {key: count, ...}
-    {{groupSum arr "field" "valueField"}} — returns object {key: sum, ...}
-    {{groupAvg arr "field" "valueField"}} — returns object {key: avg, ...}
-    {{keys obj}} — returns array of object keys
-    {{values obj}} — returns array of object values
-    {{json obj}} — returns JSON string of any value
-
-  SUB-EXPRESSION helpers (can be used inside parentheses):
-    {{#each (sortBy arr "field" "asc")}} ✓ — sortBy returns an array
-    {{#if (eq Status "Active")}} ✓ — eq returns true/false
-    {{#if (gt (count arr) 10)}} ✓ — count returns a number
-    {{#each (unique arr "field")}} ✓ — unique returns an array
-
-  CANNOT be used as sub-expressions (they are block helpers):
-    {{count (filterBy ...)}} ✗ — filterBy is a BLOCK helper
-    {{count (groupBy ...)}} ✗ — groupBy is a BLOCK helper
-    {{formatDateTime (now)}} ✗ — now returns a string, not a timestamp
-
-  CORRECT PATTERNS for filtered counts:
-    {{#filterBy Contacts "Status" "Active"}}{{count items}}{{/filterBy}}
-    {{#filterBy Contacts "Status" "Active"}}{{percent count (count ../Contacts)}}{{/filterBy}}
-
-VISUAL ELEMENTS:
-  Charts: <canvas data-chart-type="TYPE" data-chart-table="Table" data-chart-group="Field" data-chart-title="Title">
-    Types: bar, line, pie, doughnut, radar, polarArea, scatter, bubble
-    Sum a field instead of counting: add data-chart-value="Field"
-    Multi-dataset (side-by-side bars): data-chart-datasets="count:Count,sum:Value:Total Value"
-      Format: "agg:field:label" — agg is count, sum, or avg. Field is the column name. Label is optional display name.
-      Example: <canvas data-chart-type="bar" data-chart-table="Deals" data-chart-group="Stage" data-chart-datasets="count:Deals:Deal Count,sum:Value:Total Value" data-chart-title="Pipeline by Stage">
-    Full Chart.js config via helper (for ANY chart — stacked, dual-axis, time-series, custom colours):
-      <canvas data-chart='{{chartConfig "bar" Deals "Stage" "count:Count,sum:Value:Total Value" "Pipeline"}}'></canvas>
-      chartConfig(type, array, groupField, metrics, title) — returns complete Chart.js JSON config.
-      Metrics format: comma-separated "agg:field:label" — agg is count, sum, or avg.
-    For fully custom Chart.js configs (radar, scatter, bubble, stacked, annotations):
-      <canvas data-chart='{"type":"bar","data":{"labels":["A","B"],"datasets":[...]},"options":{"scales":{"x":{"stacked":true},"y":{"stacked":true}}}}'></canvas>
-    IMPORTANT: Do NOT use block helpers ({{#groupBy}}, {{#each}}) inside data-chart attributes — they produce HTML not JSON. Use ONLY the {{chartConfig}} inline helper or write static JSON.
-  Maps: <div data-map data-map-table="Table" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="Name" data-map-colour="Status" style="height:400px"></div>
-    Add data-map-cluster="true" for marker clustering (groups nearby pins)
-    Add data-map-heat="true" for heatmap mode (density visualisation)
-  QR codes: <div data-qr="{{field}}" data-qr-size="128"></div>
-  Barcodes: <div data-barcode="{{field}}" data-barcode-format="CODE128"></div>
-  Images: <img data-asset="filename.png">
-
-VISUAL HELPERS (inline, return rendered HTML):
-  {{progressBar value max}} — inline green progress bar
-  {{stars 3 5}} — ★★★☆☆ star rating
-  {{colourScale value min max}} — coloured dot (green-to-red scale)
-  {{initials "John Smith"}} — coloured circle avatar with "JS"
-  {{watermark "DRAFT"}} — faint diagonal background text
-  {{signatureLine "Approved by"}} — signature line for printed forms
-  {{#labels 3}}...{{/labels}} — grid layout for mailing labels (N columns)
-
-FORMATTING HELPERS (inline, return text):
-  {{formatNumber 1234567}} — "1,234,567"
-  {{currency value "GBP"}} — £1,234.56 (supports any ISO currency code)
-  {{timeAgo timestamp}} — "3 days ago", "2 months ago"
-
-${output === "screen" ? `STYLE GUIDE:
-- Professional, clean, modern. Think Power BI / executive dashboard.
-- Use KPI cards (big number + label) for summary metrics.
-- Use colour-coded badges/pills for status fields.
-- Use subtle borders, rounded corners, consistent spacing.
-- Dark headers with white text for section titles.
-- Tables: alternating row colours, hover highlight, compact font size.` : `STYLE GUIDE:
-- Professional, clean, minimal. Optimised for paper/PDF output.
-- Use compact font sizes (10-11px body, 8-9px table cells).
-- Use thin borders and lines to separate sections — avoid heavy background colours.
-- Tables: full-width, alternating light row shading, compact padding.
-- Use bold text and underlines for emphasis instead of colour blocks.`}
-${mode === "record" ? `\nMODE: SINGLE RECORD — The primary table will contain exactly one row, but it is still passed as an ARRAY. You MUST wrap all primary table field access inside {{#each PrimaryTableName}}...{{/each}}. Example:
-  {{#each Contacts}}
-    <h1>{{First_Name}} {{Last_Name}}</h1>
-    <p>{{Email}}</p>
-  {{/each}}
-Do NOT access fields like {{First_Name}} at the top level — that will not work. Always use {{#each TableName}} even for a single record.
-Linked tables (Deals, Tasks, etc.) are also arrays filtered to this record. Loop them with {{#each Deals}}...{{/each}}.` : ""}${mode === "filtered" ? "\nMODE: FILTERED — Data is pre-filtered by the user. Design a summary dashboard with KPI cards, charts, and a detail table." : ""}${mode === "all" ? "\nMODE: ALL DATA — Full dataset. Design a comprehensive overview with charts and grouped tables." : ""}
-${output === "print" ? `\nOUTPUT: PRINT (PAPER)
-- Design for A4/Letter paper, not screen.
-- Use a single-column or simple two-column layout. NO CSS Grid dashboards.
-- Use compact font sizes (10-11px body, 8-9px table cells).
-- Minimise whitespace — tight padding and margins.
-- Use light colours only — avoid dark backgrounds (they waste ink).
-- Use borders and lines to separate sections instead of background colours.
-- Add page-break-before on major sections if the report is long.
-- Tables should be full-width with thin borders.
-- Charts should be small (max 300px height) and positioned inline.
-- Do NOT use box-shadow, border-radius, or gradients.
-- Include a header with report title and date, and a footer with page context.` : `\nOUTPUT: SCREEN
-- Design for screen display inside a Grist widget.
-- Use CSS Grid for dashboard layouts with cards.
-- Use generous padding, rounded corners, subtle shadows.
-- Dark headers, colour-coded badges, modern styling.
-- Charts can be any size. Maps are interactive.
-- Optimise for visual impact and readability on screen.`}
-
-DATABASE SCHEMA:
-${schemaText}
-
-REPORT REQUEST:
-${request}
-
-IMPORTANT: Do NOT generate the template yet. First, ask 3-5 clarifying questions to ensure you understand exactly what is needed (e.g. "Should the table show all fields or just key ones?", "Do you want a dark or light theme?", "Should records be grouped by any field?", "Portrait or landscape for print?"). After I answer, then generate the final template.
-
-WHEN GENERATING:
-- Output valid, well-formed HTML only. Ensure all tags are properly closed.
-- Use the REAL column names from the DATABASE SCHEMA above — not placeholder or demo names.
-- Reference tables exactly as listed in the schema (case-sensitive).
-- Do not invent fields that don't exist in the schema. Only use columns listed above.
-- Do not include sample/hardcoded data. All values must come from Handlebars placeholders referencing real fields.
-
-VALIDATION CHECKLIST (verify before outputting):
-1. BLOCK NESTING: Every {{#each}}, {{#if}}, {{#groupBy}}, {{#filterBy}}, {{#columns}}, {{#labels}} must have a matching closing tag ({{/each}}, {{/if}}, etc.). Count opens and closes — they MUST match.
-2. NO BLOCK HELPERS IN ATTRIBUTES: Never use {{#each}}, {{#groupBy}}, {{#if}} inside HTML attribute values (especially data-chart='...'). Use only inline helpers like {{chartConfig}}, {{json}}, {{count}}.
-3. SCOPE ERRORS: Inside {{#each Table}}, fields are accessed directly ({{Field}}). To access other tables, use {{@root.OtherTable}}. Do NOT reference {{OtherTable}} without @root from inside a loop.
-4. HELPER ARGUMENTS: {{count}} takes an array, not a number. {{sum}} and {{avg}} take (array, "fieldName"). {{percent}} takes (numerator, denominator). {{formatDate}} takes a timestamp, NOT the output of {{now}}.
-5. UNCLOSED HTML TAGS: Every <div>, <table>, <tr>, <td>, <span> must be closed. Self-closing tags (<img>, <br>, <canvas>) do not need closing tags.
-6. CONDITIONAL BLOCKS INSIDE LOOPS: If you open {{#if}} inside {{#each}}, close it BEFORE closing the {{/each}}. Never interleave block boundaries.
-7. TRIPLE BRACES: Use {{{helper}}} (triple) only for helpers that return HTML (progressBar, stars, initials, watermark, signatureLine). Use {{helper}} (double) for text/number helpers.
-8. COMMA-SEPARATED VALUES: In data-chart-datasets, ensure no trailing comma. Format: "count:Count,sum:Value:Label" not "count:Count,sum:Value:Label,".
-9. QUOTES IN ATTRIBUTES: If an attribute value contains double quotes, use single quotes for the attribute wrapper, or use &quot; inside.
-10. {{else}} USAGE: {{else}} is only valid inside {{#if}} and {{#each}} blocks. Do NOT use {{else}} inside {{#groupBy}} or {{#filterBy}}.
-11. FIELD ACCESS IN LOOPS: Inside {{#each Table}}, access fields directly as {{Field}} — never {{Table.Field}} or {{Table.0.Field}}.
-12. sortBy IS INLINE ONLY: sortBy returns an array — use {{#each (sortBy arr "field" "asc")}}. Never write {{#sortBy}}.
-13. NO SUB-EXPRESSIONS INTO BLOCK HELPERS: Do NOT pass sub-expressions as the array argument to block helpers. ✗ {{#groupBy (sortBy arr "field") "key"}} — this causes "options.fn is not a function". ✓ Instead, sort first with {{#each (sortBy arr "field" "asc")}} then group inside, or use groupBy on the raw array without sorting.`;
-
-        document.getElementById("prompt-text").textContent = prompt;
-        document.getElementById("prompt-output").style.display = "block";
+    const MODEL_NAMES = {
+        "gemini-2.5-flash-lite": "2.5 Flash-Lite",
+        "gemini-2.5-flash": "2.5 Flash",
+        "gemini-3.1-flash-lite-preview": "3.1 Flash-Lite",
+        "gemini-2.5-pro": "2.5 Pro",
+        "gemini-3.5-flash": "3.5 Flash",
+        "gemini-3.1-pro-preview": "3.1 Pro"
     };
 
-    window.copyPrompt = () => {
-        const text = document.getElementById("prompt-text").textContent;
-        navigator.clipboard.writeText(text).then(() => {
-            showStatus("Prompt copied to clipboard!", "success");
-        });
-    };    // ── Preview ────────────────────────────────────────────────────────────
-    window.previewReport = async () => {
-        const templateHTML = document.getElementById("rpt-template").value;
-        const dataTables = (document.getElementById("rpt-data").value || document.getElementById("rpt-link").value).split(",").map(t => t.trim()).filter(Boolean);
+    // ── Progress Indicators ──────────────────────────────────────────────
+    function updateProgressIndicators(readiness) {
+        // Update readiness (AI-scored) — colour: red → yellow → green
+        const readinessPercent = Math.max(0, Math.min(100, readiness || 0));
+        const readinessFill = document.getElementById("readiness-fill");
+        readinessFill.style.width = readinessPercent + "%";
+        document.getElementById("readiness-value").textContent = readinessPercent + "%";
+        // Red (0%) → Yellow (50%) → Green (100%)
+        if (readinessPercent < 50) {
+            const ratio = readinessPercent / 50;
+            readinessFill.style.background = "rgb(" + Math.round(229 - ratio * 40) + "," + Math.round(57 + ratio * 140) + ",53)";
+        } else {
+            const ratio = (readinessPercent - 50) / 50;
+            readinessFill.style.background = "rgb(" + Math.round(189 - ratio * 167) + "," + Math.round(197 - ratio * 18) + "," + Math.round(53 + ratio * 67) + ")";
+        }
 
-        if (!templateHTML) { showStatus("Paste a template first", "error"); return; }
+        // Update complexity (client-calculated) — colour: yellow → orange → red
+        const complexity = calculateComplexityScore();
+        const complexityPercent = complexity * 10;
+        const complexityFill = document.getElementById("complexity-fill");
+        complexityFill.style.width = complexityPercent + "%";
+        document.getElementById("complexity-value").textContent = complexity + "/10";
+        // Yellow (0) → Orange (5) → Red (10)
+        const cRatio = complexity / 10;
+        complexityFill.style.background = "rgb(" + Math.round(249 - cRatio * 20) + "," + Math.round(168 - cRatio * 111) + "," + Math.round(37 + cRatio * 16) + ")";
+
+        // Highlight Generate button when readiness >= 80%
+        const genBtn = document.querySelector('[onclick="generateTemplate()"]');
+        if (genBtn) {
+            if (readinessPercent >= 80) {
+                genBtn.classList.add("btn-generate-ready");
+            } else {
+                genBtn.classList.remove("btn-generate-ready");
+            }
+        }
+    }
+
+    // ── Model Complexity Checker ─────────────────────────────────────────
+    window.checkModel = () => {
+        const score = calculateComplexityScore();
+        const suggested = getModelForScore(score);
+        const current = document.getElementById("cfg-model").value;
+
+        const currentName = MODEL_NAMES[current] || current;
+        const suggestedName = MODEL_NAMES[suggested] || suggested;
+
+        if (current === suggested) {
+            addMessage("system", "🎯 Complexity: " + score + "/10. Current model (" + currentName + ") is appropriate.");
+        } else {
+            const change = confirm("🎯 Complexity score: " + score + "/10\n\nCurrent model: " + currentName + "\nSuggested model: " + suggestedName + "\n\nSwitch to " + suggestedName + "?");
+            if (change) {
+                document.getElementById("cfg-model").value = suggested;
+                addMessage("system", "🎯 Model changed from " + currentName + " to " + suggestedName + " (complexity " + score + "/10).");
+            } else {
+                addMessage("system", "🎯 Keeping " + currentName + " (complexity " + score + "/10).");
+            }
+        }
+    };
+
+    // ── Settings ──────────────────────────────────────────────────────────
+    window.toggleSettings = () => document.getElementById("settings-bar").classList.toggle("visible");
+
+    window.saveSettings = function() {
+        const endpoint = document.getElementById("cfg-endpoint").value.trim();
+        const token = document.getElementById("cfg-token").value.trim();
+        const model = document.getElementById("cfg-model").value;
+        if (endpoint) localStorage.setItem("rpt_ai_endpoint", endpoint);
+        if (token) localStorage.setItem("rpt_ai_apikey", token);
+        localStorage.setItem("rpt_ai_model", model);
+        addMessage("system", "✅ Settings saved to browser.");
+    };
+    function loadSettings() {
+        const endpoint = localStorage.getItem("rpt_ai_endpoint");
+        const token = localStorage.getItem("rpt_ai_apikey");
+        const model = localStorage.getItem("rpt_ai_model");
+        if (endpoint) document.getElementById("cfg-endpoint").value = endpoint;
+        if (token) document.getElementById("cfg-token").value = token;
+        if (model) document.getElementById("cfg-model").value = model;
+    }
+
+    // ── Chat UI ───────────────────────────────────────────────────────────
+    function addMessage(role, content) {
+        const div = document.createElement("div");
+        div.className = "message message-" + role;
+        div.textContent = content;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+        return div;
+    }
+
+    function showTyping() {
+        const div = document.createElement("div");
+        div.className = "message message-ai";
+        div.innerHTML = '<span class="typing"></span>';
+        div.id = "typing-indicator";
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+    }
+    function removeTyping() { const el = document.getElementById("typing-indicator"); if (el) el.remove(); }
+
+    // ── API Communication ─────────────────────────────────────────────────
+    function getEndpoint() { return document.getElementById("cfg-endpoint").value.trim() || DEFAULT_ENDPOINT; }
+    function getApiKey() { return (document.getElementById("cfg-token").value || "").trim().replace(/[^\x20-\x7E]/g, ""); }
+
+    async function callAI(messages, generateMode) {
+        const endpoint = getEndpoint();
+        const apiKey = getApiKey();
+        if (!apiKey) { addMessage("system", "⚠️ Set your Gemini API key in Settings."); return null; }
+
+        const body = {
+            schema: getSchemaText(),
+            tables: Object.keys(schema),
+            mode: document.getElementById("rpt-mode").value,
+            output: document.getElementById("rpt-output").value,
+            linkTable: document.getElementById("rpt-link").value,
+            dataTables: document.getElementById("rpt-data").value,
+            requirements: document.getElementById("rpt-requirements").value,
+            messages: messages,
+            generateTemplate: !!generateMode,
+            model: document.getElementById("cfg-model").value
+        };
+
+        if (document.getElementById("cfg-transparency").checked) {
+            addMessage("system", "📤 Sending: schema (" + body.tables.length + " tables), " + body.messages.length + " messages, mode=" + body.mode);
+        }
+
+        const headers = { "Content-Type": "application/json" };
+        if (apiKey) headers["X-Auth-Token"] = apiKey;
 
         try {
+            const res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
+            if (!res.ok) { const err = await res.text(); throw new Error(err); }
+            const text = await res.text();
+            try {
+                return JSON.parse(text);
+            } catch(parseErr) {
+                // Worker returned non-JSON — wrap as plain message
+                return { message: text };
+            }
+        } catch(e) {
+            addMessage("system", "⚠️ " + e.message);
+            return null;
+        }
+    }
+
+    // ── Message handling ──────────────────────────────────────────────────
+    window.handleKey = (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        setTimeout(() => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 100) + "px"; }, 0);
+    };
+
+    window.sendMessage = async () => {
+        const text = input.value.trim();
+        if (!text || generating) return;
+
+        addMessage("user", text);
+        conversation.push({ role: "user", content: text });
+        input.value = ""; input.style.height = "auto";
+
+        generating = true; sendBtn.disabled = true;
+        showTyping();
+
+        const response = await callAI(conversation, false);
+        removeTyping();
+        generating = false; sendBtn.disabled = false;
+
+        if (response) {
+            if (response.message) {
+                // Store full JSON in conversation so AI remembers what fields it set
+                const historyContent = response.fields
+                    ? JSON.stringify({ message: response.message, fields: response.fields })
+                    : response.message;
+                conversation.push({ role: "assistant", content: historyContent });
+                addMessage("ai", response.message);
+            }
+            // If AI suggested form field updates
+            if (response.fields) {
+                if (response.fields.Report_Name) document.getElementById("rpt-name").value = response.fields.Report_Name;
+                if (response.fields.Description) document.getElementById("rpt-desc").value = response.fields.Description;
+                if (response.fields.Link_Table) document.getElementById("rpt-link").value = response.fields.Link_Table;
+                if (response.fields.Data_Tables) document.getElementById("rpt-data").value = response.fields.Data_Tables;
+                if (response.fields.Filter_Mode) document.getElementById("rpt-mode").value = response.fields.Filter_Mode;
+                if (response.fields.Output) document.getElementById("rpt-output").value = response.fields.Output;
+                if (response.fields.Report_Requirements) document.getElementById("rpt-requirements").value = response.fields.Report_Requirements;
+                if (response.fields.Filters) document.getElementById("rpt-filters").value = response.fields.Filters;
+            }
+            // Update progress indicators
+            updateProgressIndicators(response.readiness);
+            // If template was generated
+            if (response.template) {
+                try {
+                    Handlebars.compile(response.template);
+                    document.getElementById("rpt-template").value = response.template;
+                    addMessage("system", "✅ Template generated and placed in the form.");
+                } catch (compileErr) {
+                    document.getElementById("rpt-template").value = response.template;
+                    addMessage("system", "⚠️ Template has a syntax issue: " + compileErr.message + ". Placed in form — please review before saving.");
+                }
+            }
+        }
+        input.focus();
+    };
+
+    // ── Generate Template ─────────────────────────────────────────────────
+    window.generateTemplate = async () => {
+        if (generating) return;
+        const requirements = document.getElementById("rpt-requirements").value.trim();
+        if (!requirements) { showStatus("Enter requirements first (use the chat to refine them).", "error"); return; }
+
+        generating = true; sendBtn.disabled = true;
+
+        // Select generation model based on complexity score
+        const score = calculateComplexityScore();
+        const generationModel = getModelForScore(score);
+        const generationModelName = MODEL_NAMES[generationModel] || generationModel;
+
+        const modelSelect = document.getElementById("cfg-model");
+        const conversationModel = modelSelect.value;
+        modelSelect.value = generationModel;
+        addMessage("system", "🤖 Generating template (complexity " + score + "/10 → " + generationModelName + ")...");
+        showTyping();
+
+        // Add a generate instruction to conversation
+        const genMessages = [...conversation, { role: "user", content: "Generate the HTML template now based on the current requirements. Output the complete template." }];
+
+        const response = await callAI(genMessages, true);
+
+        // Revert to conversation model
+        modelSelect.value = conversationModel;
+
+        removeTyping();
+        generating = false; sendBtn.disabled = false;
+
+        if (response) {
+            if (response.template) {
+                // Validate template with Handlebars.compile; retry once on failure
+                let template = response.template;
+                try {
+                    Handlebars.compile(template);
+                } catch (compileErr) {
+                    addMessage("system", "⚠️ Template has syntax error: " + compileErr.message + ". Retrying...");
+                    showTyping();
+                    generating = true; sendBtn.disabled = true;
+                    const retryMessages = [...genMessages, {
+                        role: "assistant", content: template
+                    }, {
+                        role: "user", content: "The template you generated has a Handlebars syntax error:\n" + compileErr.message + "\n\nPlease fix the template and return the corrected version."
+                    }];
+                    const retryResponse = await callAI(retryMessages, true);
+                    removeTyping();
+                    generating = false; sendBtn.disabled = false;
+                    if (retryResponse && retryResponse.template) {
+                        try {
+                            Handlebars.compile(retryResponse.template);
+                            template = retryResponse.template;
+                            addMessage("system", "✅ Retry succeeded — fixed template accepted.");
+                        } catch (retryErr) {
+                            addMessage("system", "⚠️ Retry still has errors: " + retryErr.message + ". Using template as-is.\n\n💡 You can type \"fix the template\" in chat to revise it, or edit the template directly below.");
+                            template = retryResponse.template;
+                        }
+                    }
+                }
+                document.getElementById("rpt-template").value = template;
+                addMessage("system", "✅ Template generated (" + template.length + " chars). Preview or save when ready.");
+                if (response.message) addMessage("ai", response.message);
+            } else if (response.message) {
+                addMessage("ai", response.message);
+            }
+        }
+    };
+
+    // ── Preview ───────────────────────────────────────────────────────────
+    window.previewReport = async () => {
+        const templateHTML = document.getElementById("rpt-template").value;
+        if (!templateHTML) { showStatus("No template to preview.", "error"); return; }
+        try {
+            const dataTables = (document.getElementById("rpt-data").value || document.getElementById("rpt-link").value).split(",").map(t => t.trim()).filter(Boolean);
             const data = {};
             await Promise.all(dataTables.map(async (table) => { data[table] = await fetchTable(table); }));
-            data._meta = { reportName: "Preview", generatedAt: new Date().toLocaleString("en-GB"), recordCounts: {} };
-            for (const [t, rows] of Object.entries(data)) { if (t !== "_meta") data._meta.recordCounts[t] = rows.length; }
-
-            // Register helpers (same as report widget)
-            registerHelpers();
+            data._meta = { reportName: "Preview", generatedAt: new Date().toLocaleString("en-GB") };
 
             const template = Handlebars.compile(templateHTML);
             const html = template(data);
-
-            const frame = document.getElementById("preview-frame");
-            frame.innerHTML = html;
+            document.getElementById("preview-frame").innerHTML = html;
             document.getElementById("preview-area").style.display = "block";
-
-            // Render charts in preview
-            frame.querySelectorAll("canvas[data-chart-type]").forEach(canvas => {
-                try {
-                    const type = canvas.dataset.chartType;
-                    const tableData = data[canvas.dataset.chartTable];
-                    const groupField = canvas.dataset.chartGroup;
-                    const title = canvas.dataset.chartTitle || "";
-                    if (!Array.isArray(tableData)) return;
-                    const groups = {};
-                    tableData.forEach(row => { const k = row[groupField] || "(blank)"; groups[k] = (groups[k] || 0) + 1; });
-                    const colours = ["#16b378","#e63946","#457b9d","#f4a261","#6a4c93","#2a9d8f","#e76f51","#264653"];
-                    new Chart(canvas, { type, data: { labels: Object.keys(groups), datasets: [{ data: Object.values(groups), backgroundColor: Object.keys(groups).map((_, i) => colours[i % colours.length]) }] }, options: { responsive: true, plugins: { title: { display: !!title, text: title }, legend: { display: type === "pie" || type === "doughnut" } } } });
-                } catch(e) { console.error("Preview chart error:", e); }
-            });
-
-            showStatus("Preview rendered successfully", "success");
+            showStatus("Preview rendered.", "success");
         } catch(e) {
             showStatus("Preview error: " + e.message, "error");
         }
     };
 
-    function registerHelpers() {
-        const h = Handlebars;
-        if (h._buildersRegistered) return;
-        h._buildersRegistered = true;
-        h.registerHelper("eq", (a, b) => a === b);
-        h.registerHelper("neq", (a, b) => a !== b);
-        h.registerHelper("gt", (a, b) => a > b);
-        h.registerHelper("lt", (a, b) => a < b);
-        h.registerHelper("gte", (a, b) => a >= b);
-        h.registerHelper("lte", (a, b) => a <= b);
-        h.registerHelper("and", (a, b) => a && b);
-        h.registerHelper("or", (a, b) => a || b);
-        h.registerHelper("not", (a) => !a);
-        h.registerHelper("add", (a, b) => Number(a) + Number(b));
-        h.registerHelper("subtract", (a, b) => Number(a) - Number(b));
-        h.registerHelper("multiply", (a, b) => Number(a) * Number(b));
-        h.registerHelper("divide", (a, b) => b !== 0 ? Number(a) / Number(b) : 0);
-        h.registerHelper("percent", (a, b) => b !== 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%");
-        h.registerHelper("round", (n, d) => Number(n).toFixed(typeof d === "number" ? d : 0));
-        h.registerHelper("count", (arr) => Array.isArray(arr) ? arr.length : 0);
-        h.registerHelper("sum", function(arr, key) { if (!Array.isArray(arr)) return 0; return arr.reduce((s, i) => s + (Number(i[key]) || 0), 0); });
-        h.registerHelper("avg", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return (arr.reduce((s, i) => s + (Number(i[key]) || 0), 0) / arr.length).toFixed(1); });
-        h.registerHelper("max", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.max(...arr.map(i => Number(i[key]) || 0)); });
-        h.registerHelper("min", function(arr, key) { if (!Array.isArray(arr) || !arr.length) return 0; return Math.min(...arr.map(i => Number(i[key]) || 0)); });
-        h.registerHelper("unique", function(arr, key) { if (!Array.isArray(arr)) return []; return [...new Set(arr.map(i => i[key]).filter(Boolean))]; });
-        h.registerHelper("groupBy", function(arr, key, options) { if (!Array.isArray(arr)) return ""; const g = {}; arr.forEach(i => { const k = i[key] || "(blank)"; if (!g[k]) g[k] = []; g[k].push(i); }); let o = ""; for (const [k, items] of Object.entries(g)) o += options.fn({ key: k, items, count: items.length }); return o; });
-        h.registerHelper("filterBy", function(arr, key, value, options) { if (!Array.isArray(arr)) return ""; const f = arr.filter(i => i[key] === value); return options.fn({ items: f, count: f.length }); });
-        h.registerHelper("sortBy", function(arr, key, dir) { if (!Array.isArray(arr)) return []; const s = [...arr].sort((a, b) => a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0); return dir === "desc" ? s.reverse() : s; });
-        h.registerHelper("formatDate", (val) => { if (!val) return ""; return new Date(val * 1000).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); });
-        h.registerHelper("now", () => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }));
-        h.registerHelper("uppercase", (s) => String(s || "").toUpperCase());
-        h.registerHelper("lowercase", (s) => String(s || "").toLowerCase());
-        h.registerHelper("truncate", (s, len) => { const str = String(s || ""); return str.length > len ? str.slice(0, len) + "..." : str; });
-    }
-
-    // ── Save Report ────────────────────────────────────────────────────────
-    window.saveReport = async (existingId, asNewVersion) => {
+    // ── Save Report ───────────────────────────────────────────────────────
+    window.saveReport = async () => {
         const name = document.getElementById("rpt-name").value.trim();
-        const desc = document.getElementById("rpt-desc").value.trim();
-        const linkTable = document.getElementById("rpt-link").value;
-        const dataTables = document.getElementById("rpt-data").value.trim();
-        const mode = document.getElementById("rpt-mode").value;
-        const output = document.getElementById("rpt-output").value;
-        const templateHTML = document.getElementById("rpt-template").value;
-        const filters = document.getElementById("rpt-filters").value.trim();
-        const requirements = document.getElementById("rpt-request").value.trim();
-
-        if (!name) { showStatus("Report name is required", "error"); return; }
-        if (!templateHTML) { showStatus("Template HTML is required", "error"); return; }
+        const templateHTML = document.getElementById("rpt-template").value.trim();
+        if (!name) { showStatus("Report name is required.", "error"); return; }
+        if (!templateHTML) { showStatus("Template HTML is required.", "error"); return; }
 
         try {
             const fields = {
                 Report_Name: name,
-                Description: desc,
-                Link_Table: linkTable,
-                Data_Tables: dataTables,
-                Filter_Mode: mode,
-                Output: output,
+                Description: document.getElementById("rpt-desc").value.trim(),
+                Link_Table: document.getElementById("rpt-link").value,
+                Data_Tables: document.getElementById("rpt-data").value.trim(),
+                Filter_Mode: document.getElementById("rpt-mode").value,
+                Output: document.getElementById("rpt-output").value,
                 Template_HTML: templateHTML,
-                Filters: filters,
-                Report_Requirements: requirements,
+                Filters: document.getElementById("rpt-filters").value.trim(),
+                Report_Requirements: document.getElementById("rpt-requirements").value.trim(),
                 Active: true
             };
 
-            if (existingId && !asNewVersion) {
-                // Update in place
-                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, fields]]);
-            } else if (existingId && asNewVersion) {
-                // Deactivate old, create new version
-                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, existingId, { Active: false }]]);
-                // Increment version in name
-                let versionName = name;
-                const versionMatch = name.match(/- Version (\d+)$/);
-                if (versionMatch) {
-                    versionName = name.replace(/- Version \d+$/, "- Version " + (parseInt(versionMatch[1]) + 1));
-                } else {
-                    versionName = name + " - Version 2";
-                }
-                fields.Report_Name = versionName;
-                await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
+            if (editingReportId) {
+                // Update in place (R7.3)
+                await grist.docApi.applyUserActions([["UpdateRecord", REPORTS_TABLE, editingReportId, fields]]);
+                showStatus('"' + name + '" updated.', "success");
+                addMessage("system", '💾 "' + name + '" updated in ' + REPORTS_TABLE + '.');
             } else {
-                // Brand new report
                 await grist.docApi.applyUserActions([["AddRecord", REPORTS_TABLE, null, fields]]);
+                showStatus('"' + name + '" saved.', "success");
+                addMessage("system", '💾 "' + name + '" saved to ' + REPORTS_TABLE + '.');
             }
-
-            // Refresh reports list
-            reports = await fetchTable(REPORTS_TABLE);
-            reports = reports.filter(r => r.Active === true);
-
-            showStatus('"' + (fields.Report_Name || name) + '" saved successfully.', "success");
+            await populateExistingReports();
         } catch(e) {
             showStatus("Save failed: " + e.message, "error");
         }
     };
 
-    // ── Edit Panel ──────────────────────────────────────────────────────────
-    function renderEditPanel() {
-        if (reports.length === 0) {
-            document.getElementById("panel-edit").innerHTML = `<p style="color: #888; font-size: 13px;">No reports found in ${REPORTS_TABLE}.</p>`;
+    // ── Save as New Version (R7.4) ────────────────────────────────────────
+    window.saveAsNewVersion = async () => {
+        if (!editingReportId) return;
+        const name = document.getElementById("rpt-name").value.trim();
+        const templateHTML = document.getElementById("rpt-template").value.trim();
+        if (!name) { showStatus("Report name is required.", "error"); return; }
+        if (!templateHTML) { showStatus("Template HTML is required.", "error"); return; }
+
+        try {
+            // Get current version from the old report
+            const oldReport = existingReports.find(r => r.id === editingReportId);
+            const oldVersion = (oldReport && oldReport.Version) ? oldReport.Version : 1;
+            const newVersion = oldVersion + 1;
+
+            // Create new record with incremented version
+            const fields = {
+                Report_Name: name,
+                Description: document.getElementById("rpt-desc").value.trim(),
+                Link_Table: document.getElementById("rpt-link").value,
+                Data_Tables: document.getElementById("rpt-data").value.trim(),
+                Filter_Mode: document.getElementById("rpt-mode").value,
+                Output: document.getElementById("rpt-output").value,
+                Template_HTML: templateHTML,
+                Filters: document.getElementById("rpt-filters").value.trim(),
+                Report_Requirements: document.getElementById("rpt-requirements").value.trim(),
+                Active: true,
+                Version: newVersion
+            };
+
+            // Deactivate old record and create new one
+            await grist.docApi.applyUserActions([
+                ["UpdateRecord", REPORTS_TABLE, editingReportId, { Active: false }],
+                ["AddRecord", REPORTS_TABLE, null, fields]
+            ]);
+
+            showStatus('"' + name + '" v' + newVersion + ' created (old version deactivated).', "success");
+            addMessage("system", '📋 "' + name + '" v' + newVersion + ' saved. Previous v' + oldVersion + ' deactivated.');
+
+            // Switch to editing the new version
+            await populateExistingReports();
+            // Find the newly created record (highest id with this name)
+            const newReport = existingReports.filter(r => r.Report_Name === name && r.Active === true).sort((a, b) => b.id - a.id)[0];
+            if (newReport) {
+                editingReportId = newReport.id;
+                document.getElementById("edit-existing-select").value = newReport.id;
+            }
+        } catch(e) {
+            showStatus("Save as new version failed: " + e.message, "error");
+        }
+    };
+
+    // ── Edit Existing Report ──────────────────────────────────────────────
+    let existingReports = [];
+    let editingReportId = null;
+
+    async function populateExistingReports() {
+        try {
+            existingReports = await fetchTable(REPORTS_TABLE);
+            const select = document.getElementById("edit-existing-select");
+            // Clear all options except the first "New Report" option
+            select.length = 1;
+            existingReports.forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = r.id;
+                opt.textContent = r.Report_Name || ("Report #" + r.id);
+                select.appendChild(opt);
+            });
+        } catch(e) {
+            // SysReports table may not exist yet — that's fine
+        }
+    }
+
+    window.loadExistingReport = function() {
+        const select = document.getElementById("edit-existing-select");
+        const selectedId = parseInt(select.value);
+        if (!selectedId) {
+            // "New Report" selected — clear form
+            editingReportId = null;
+            document.getElementById("rpt-name").value = "";
+            document.getElementById("rpt-desc").value = "";
+            document.getElementById("rpt-link").value = "";
+            document.getElementById("rpt-data").value = "";
+            document.getElementById("rpt-mode").value = "all";
+            document.getElementById("rpt-output").value = "screen";
+            document.getElementById("rpt-requirements").value = "";
+            document.getElementById("rpt-template").value = "";
+            document.getElementById("rpt-filters").value = "";
+            document.getElementById("btn-save-new-version").style.display = "none";
+            showStatus("Form cleared for new report.", "success");
             return;
         }
-        let html = `<ul class="report-list">`;
-        reports.forEach(r => {
-            html += `<li onclick="editReport(${r.id})"><div><span class="name">${r.Report_Name || "Untitled"}</span><br><span class="meta">${r.Link_Table || ""} · ${r.Filter_Mode || "all"}</span></div><span class="meta">${r.Data_Tables || ""}</span></li>`;
-        });
-        html += `</ul>`;
-        document.getElementById("panel-edit").innerHTML = html;
-    }
+        const report = existingReports.find(r => r.id === selectedId);
+        if (!report) { showStatus("Report not found.", "error"); return; }
 
-    window.editReport = (id) => {
-        const report = reports.find(r => r.id === id);
-        if (!report) return;
-        // Load report into form as-is (no version increment)
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        const createTab = document.querySelector('.tab[onclick*="create"]');
-        createTab.textContent = "Edit Report";
-        createTab.classList.add("active");
-        document.getElementById("panel-create").classList.add("active");
-        renderCreatePanel(report);
+        editingReportId = selectedId;
+        document.getElementById("rpt-name").value = report.Report_Name || "";
+        document.getElementById("rpt-desc").value = report.Description || "";
+        document.getElementById("rpt-link").value = report.Link_Table || "";
+        document.getElementById("rpt-data").value = report.Data_Tables || "";
+        document.getElementById("rpt-mode").value = report.Filter_Mode || "all";
+        document.getElementById("rpt-output").value = report.Output || "screen";
+        document.getElementById("rpt-requirements").value = report.Report_Requirements || "";
+        document.getElementById("rpt-template").value = report.Template_HTML || "";
+        document.getElementById("rpt-filters").value = report.Filters || "";
+        document.getElementById("btn-save-new-version").style.display = "";
+        showStatus('Loaded "' + report.Report_Name + '" for editing.', "success");
+        addMessage("system", '📂 Loaded "' + report.Report_Name + '" — edit and Save to update in place.');
     };
 
-    // ── Schema Panel ────────────────────────────────────────────────────────
-    function renderSchemaPanel() {
-        let html = "";
-        for (const [tableName, tableInfo] of Object.entries(schema)) {
-            html += `<h3 style="font-size: 13px; margin: 16px 0 8px; color: #264653;">${tableName}</h3>`;
-            html += `<table class="schema-table"><thead><tr><th>Column</th><th>Type</th><th>Label</th></tr></thead><tbody>`;
-            tableInfo.columns.forEach(c => {
-                html += `<tr><td><code>${c.name}</code></td><td>${c.type}</td><td>${c.label}</td></tr>`;
-            });
-            html += `</tbody></table>`;
-        }
-        document.getElementById("panel-schema").innerHTML = html || `<p style="color: #888;">Loading schema...</p>`;
-    }
-
-    // ── Utilities ────────────────────────────────────────────────────────────
+    // ── Utilities ─────────────────────────────────────────────────────────
     function showStatus(msg, type) {
         const area = document.getElementById("status-area");
-        if (area) {
-            area.innerHTML = `<div class="status status-${type}">${msg}</div>`;
-            setTimeout(() => { area.innerHTML = ""; }, 5000);
-        }
+        area.innerHTML = '<div class="status-msg status-' + type + '">' + msg + '</div>';
+        setTimeout(() => { area.innerHTML = ""; }, 5000);
     }
 
-    // ── Import Spec Utilities ──────────────────────────────────────────────
-    function parseSpecTable(text) {
-        // Try pipe-delimited markdown table first
-        const lines = text.trim().split("\n").filter(l => l.trim().startsWith("|"));
-        if (lines.length >= 2) {
-            const result = {};
-            const dataLines = lines.filter(l => !l.match(/^\|\s*[-:]+/));
-            const rows = dataLines.slice(1);
-            rows.forEach(line => {
-                const cells = line.split("|").map(c => c.trim()).filter(Boolean);
-                if (cells.length >= 2) {
-                    let field = cells[0].trim();
-                    let value = cells.slice(1).join("|").trim();
-                    value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
-                    result[field] = value;
-                }
-            });
-            if (Object.keys(result).length > 0) return result;
-        }
+    // ── Initialise ────────────────────────────────────────────────────────
+    loadSettings();
 
-        // Fallback: parse "FieldValue" pairs (copied from rendered table without pipes)
-        const KNOWN_FIELDS = ["Report_Name","Description","Link_Table","Data_Tables","Filter_Mode","Output","Filters","Report_Requirements"];
-        const raw = text.trim();
-        // Try to split on known field names
-        const result = {};
-        for (let i = 0; i < KNOWN_FIELDS.length; i++) {
-            const field = KNOWN_FIELDS[i];
-            const idx = raw.indexOf(field);
-            if (idx === -1) continue;
-            const valueStart = idx + field.length;
-            // Find where the next field starts
-            let valueEnd = raw.length;
-            for (let j = 0; j < KNOWN_FIELDS.length; j++) {
-                if (j === i) continue;
-                const nextIdx = raw.indexOf(KNOWN_FIELDS[j], valueStart);
-                if (nextIdx > valueStart && nextIdx < valueEnd) valueEnd = nextIdx;
-            }
-            let value = raw.slice(valueStart, valueEnd).trim();
-            value = value.replace(/^`+/, "").replace(/`+$/, "").trim();
-            if (value) result[field] = value;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    }
-
-    const FIELD_MAP = {
-        "Report_Name": "Report_Name", "Report Name": "Report_Name", "Name": "Report_Name",
-        "Description": "Description",
-        "Link_Table": "Link_Table", "Link Table": "Link_Table",
-        "Data_Tables": "Data_Tables", "Data Tables": "Data_Tables",
-        "Filter_Mode": "Filter_Mode", "Filter Mode": "Filter_Mode", "Mode": "Filter_Mode",
-        "Output": "Output",
-        "Template_HTML": "Template_HTML", "Template HTML": "Template_HTML", "Template": "Template_HTML",
-        "Filters": "Filters",
-        "Report_Requirements": "Report_Requirements", "Report Requirements": "Report_Requirements", "Requirements": "Report_Requirements"
-    };
-
-    function normalizeSpec(parsed) {
-        const record = {};
-        for (const [key, value] of Object.entries(parsed)) {
-            const mapped = FIELD_MAP[key];
-            if (mapped) record[mapped] = value;
-        }
-        return record;
-    }
-
-    window.previewImport = () => {
-        const text = document.getElementById("import-spec").value;
-        const parsed = parseSpecTable(text);
-        if (!parsed) { showStatus("Could not parse. Ensure it's a | Field | Value | markdown table.", "error"); return; }
-        const record = normalizeSpec(parsed);
-        let html = "<table class='schema-table'><tr><th>Column</th><th>Value</th></tr>";
-        for (const [k, v] of Object.entries(record)) {
-            const display = v.length > 80 ? v.slice(0, 80) + "..." : v;
-            html += "<tr><td><code>" + k + "</code></td><td>" + display.replace(/&/g, "&amp;").replace(/[<]/g, "&lt;").replace(/[>]/g, "&gt;") + "</td></tr>";
-        }
-        html += "</table>";
-        if (!record.Report_Name) html += "<p style='color:#e53935; margin-top:8px;'>⚠️ Missing Report_Name</p>";
-        document.getElementById("import-preview-content").innerHTML = html;
-        document.getElementById("import-preview").style.display = "block";
-    };
-
-    window.importSpecToForm = () => {
-        const text = document.getElementById("import-spec").value;
-        const parsed = parseSpecTable(text);
-        if (!parsed) { showStatus("Could not parse the markdown table.", "error"); return; }
-        const record = normalizeSpec(parsed);
-        if (!record.Report_Name) { showStatus("Report_Name is required in the spec.", "error"); return; }
-
-        // Populate form fields
-        if (record.Report_Name) document.getElementById("rpt-name").value = record.Report_Name;
-        if (record.Description) document.getElementById("rpt-desc").value = record.Description;
-        if (record.Link_Table) document.getElementById("rpt-link").value = record.Link_Table;
-        if (record.Data_Tables) document.getElementById("rpt-data").value = record.Data_Tables;
-        if (record.Filter_Mode) document.getElementById("rpt-mode").value = record.Filter_Mode;
-        if (record.Output) document.getElementById("rpt-output").value = record.Output;
-        if (record.Report_Requirements) document.getElementById("rpt-request").value = record.Report_Requirements;
-        if (record.Filters) document.getElementById("rpt-filters").value = record.Filters;
-        if (record.Template_HTML) document.getElementById("rpt-template").value = record.Template_HTML;
-
-        // Clear the import area and show success
-        document.getElementById("import-spec").value = "";
-        document.getElementById("import-preview").style.display = "none";
-        showStatus("Spec imported to form. Review the fields below, then Generate AI Prompt or Save.", "success");
-    };
-
-    window.copySpecStructure = () => {
-        const tableList = Object.keys(schema).join(", ");
-        let schemaText = "";
-        for (const [tableName, tableInfo] of Object.entries(schema)) {
-            schemaText += "\nTable: " + tableName + "\nColumns: " + tableInfo.columns.map(c => c.name + " (" + c.type + ")").join(", ") + "\n";
-        }
-
-        const structure = 'You are helping me define a report specification for a Grist spreadsheet reporting system.\n\nGenerate a report spec in this EXACT markdown table format, wrapped in a code block (triple backticks) so the formatting is preserved when copied:\n\n```\n| Field | Value |\n|-------|-------|\n| Report_Name | (descriptive name) |\n| Description | (one-line summary) |\n| Link_Table | (which table page this report appears on) |\n| Data_Tables | (comma-separated list of tables the report needs) |\n| Filter_Mode | (one of: all, record, filtered) |\n| Output | (one of: screen, print) |\n| Filters | (JSON array of filter definitions, or empty) |\n| Report_Requirements | (detailed description of what the report should show — KPIs, charts, tables, layout, styling) |\n```\n\nFILTER MODES:\n- "all" — shows all data, no filter popup\n- "record" — shows data for the currently selected record (linked widget)\n- "filtered" — shows a filter popup before rendering\n\nFILTER TYPES (for Filter_Mode "filtered"):\n- Choice: {"field":"FieldName","label":"Display Label","type":"choice","table":"TableName"}\n- Date range: {"field":"FieldName","label":"Display Label","type":"date-range","table":"TableName"}\n- Number range: {"field":"FieldName","label":"Display Label","type":"number-range","table":"TableName"}\n- Text search: {"field":"FieldName","label":"Display Label","type":"text","table":"TableName"}\n- Boolean: {"field":"FieldName","label":"Display Label","type":"boolean","table":"TableName"}\n\nAVAILABLE FEATURES (mention in Report_Requirements if needed):\n- KPI cards (big number + label)\n- Charts: bar, line, pie, doughnut, radar, polarArea (via data attributes)\n- Maps with clustering or heatmap (requires Latitude/Longitude columns)\n- QR codes, barcodes\n- Progress bars, star ratings, colour-coded badges\n- Grouped tables, sorted tables\n- Multi-column layouts, mailing labels\n- Print page breaks\n\nDATABASE SCHEMA:\nAvailable tables: ' + tableList + '\n' + schemaText + '\nOUTPUT RULES:\n- Output ONLY the markdown table inside a code block — no explanation, no commentary.\n- Wrap JSON values in backticks within the table cells.\n- Report_Requirements should be detailed enough for a designer to build the template (mention specific fields, chart types, grouping, colour schemes).\n';
-
-        navigator.clipboard.writeText(structure).then(() => {
-            showStatus("Spec structure copied to clipboard! Paste it into your AI chat.", "success");
-        });
-    };
-
-    // ── Help Panel ────────────────────────────────────────────────────────
-    function renderHelpPanel() {
-        document.getElementById("panel-help").innerHTML = `
-        <div style="font-size:12px; line-height:1.8; max-width:700px;">
-            <h3 style="font-size:16px; margin-bottom:12px; color:#264653;">Report Writer Features</h3>
-            <p style="color:#666; margin-bottom:16px;">Everything available in report templates. Use these in your Template_HTML field.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📊 Charts (Chart.js)</h4>
-            <table class="schema-table">
-                <tr><th>Type</th><th>Syntax</th></tr>
-                <tr><td>Bar</td><td><code>data-chart-type="bar"</code></td></tr>
-                <tr><td>Line</td><td><code>data-chart-type="line"</code></td></tr>
-                <tr><td>Pie</td><td><code>data-chart-type="pie"</code></td></tr>
-                <tr><td>Doughnut</td><td><code>data-chart-type="doughnut"</code></td></tr>
-                <tr><td>Radar / Spider</td><td><code>data-chart-type="radar"</code></td></tr>
-                <tr><td>Polar Area</td><td><code>data-chart-type="polarArea"</code></td></tr>
-                <tr><td>Scatter</td><td><code>data-chart-type="scatter"</code></td></tr>
-                <tr><td>Bubble</td><td><code>data-chart-type="bubble"</code></td></tr>
-            </table>
-            <p><strong>Simple:</strong> <code>&lt;canvas data-chart-type="bar" data-chart-table="Contacts" data-chart-group="Status" data-chart-title="By Status"&gt;&lt;/canvas&gt;</code></p>
-            <p><strong>Advanced:</strong> <code>&lt;canvas data-chart='{"type":"radar","data":{...},"options":{...}}'&gt;&lt;/canvas&gt;</code></p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🗺️ Maps (Leaflet)</h4>
-            <p><code>&lt;div data-map data-map-table="Contacts" data-map-lat="Latitude" data-map-lng="Longitude" data-map-label="First_Name" data-map-colour="Status" style="height:400px"&gt;&lt;/div&gt;</code></p>
-            <p><strong>Clustering:</strong> Add <code>data-map-cluster="true"</code> to group nearby pins into numbered bubbles.</p>
-            <p><strong>Heatmap:</strong> Add <code>data-map-heat="true"</code> to show density instead of pins.</p>
-            <p>Requires Latitude/Longitude numeric columns. Use the Geocode Tool to populate them.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📱 QR Codes</h4>
-            <p><code>&lt;div data-qr="{{Email_1}}" data-qr-size="128"&gt;&lt;/div&gt;</code></p>
-            <p>Generates a QR code from any field value. Great for badges, labels, tickets.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📦 Barcodes</h4>
-            <p><code>&lt;div data-barcode="{{id}}" data-barcode-format="CODE128"&gt;&lt;/div&gt;</code></p>
-            <p>Formats: CODE128, EAN13, EAN8, UPC, CODE39, ITF14, MSI, pharmacode</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🖼️ Assets / Images</h4>
-            <p><code>&lt;img data-asset="logo.png"&gt;</code></p>
-            <p>Upload files to the Assets attachment column in SysReports. Reference by filename.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📊 Excel Export</h4>
-            <p>The toolbar "Excel" button exports all &lt;table&gt; elements in the rendered report as an .xlsx file.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📅 Calendar Grids</h4>
-            <p><code>{{#monthGrid 2025 5}}{{#each days}}...{{/each}}{{/monthGrid}}</code></p>
-            <p>Generates a month calendar structure. Combine with event data to build printable calendars.</p>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📐 Layout Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>What it does</th></tr>
-                <tr><td><code>{{pageBreak}}</code></td><td>Insert a print page break</td></tr>
-                <tr><td><code>{{#columns 2}}...{{/columns}}</code></td><td>Multi-column layout</td></tr>
-                <tr><td><code>{{#groupBy arr "field"}}...{{/groupBy}}</code></td><td>Group rows by a field</td></tr>
-                <tr><td><code>{{#filterBy arr "field" "value"}}...{{/filterBy}}</code></td><td>Filter rows</td></tr>
-                <tr><td><code>{{sortBy arr "field" "asc"}}</code></td><td>Sort rows</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🎨 Visual & Formatting Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{progressBar value max}}</code></td><td>Inline progress bar (green fill)</td></tr>
-                <tr><td><code>{{stars 3 5}}</code></td><td>★★★☆☆ star rating</td></tr>
-                <tr><td><code>{{colourScale value min max}}</code></td><td>Coloured dot (green→red scale)</td></tr>
-                <tr><td><code>{{initials "John Smith"}}</code></td><td>Coloured circle avatar with "JS"</td></tr>
-                <tr><td><code>{{timeAgo timestamp}}</code></td><td>"3 days ago", "2 months ago"</td></tr>
-                <tr><td><code>{{formatNumber 1234567}}</code></td><td>1,234,567</td></tr>
-                <tr><td><code>{{currency value "GBP"}}</code></td><td>£1,234.56</td></tr>
-                <tr><td><code>{{watermark "DRAFT"}}</code></td><td>Faint diagonal text behind report</td></tr>
-                <tr><td><code>{{signatureLine "Approved by"}}</code></td><td>Signature line for printed forms</td></tr>
-                <tr><td><code>{{#labels 3}}...{{/labels}}</code></td><td>Grid layout for mailing labels (3 columns)</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🔢 Data Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{count arr}}</code></td><td>Number of rows</td></tr>
-                <tr><td><code>{{sum arr "field"}}</code></td><td>Sum of numeric field</td></tr>
-                <tr><td><code>{{avg arr "field"}}</code></td><td>Average</td></tr>
-                <tr><td><code>{{max arr "field"}}</code></td><td>Maximum value</td></tr>
-                <tr><td><code>{{min arr "field"}}</code></td><td>Minimum value</td></tr>
-                <tr><td><code>{{percent a b}}</code></td><td>Percentage string (e.g. "45.2%")</td></tr>
-                <tr><td><code>{{unique arr "field"}}</code></td><td>Unique values array</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📅 Date Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{formatDate field}}</code></td><td>25 May 2025</td></tr>
-                <tr><td><code>{{formatDateTime field}}</code></td><td>25 May 2025 14:30</td></tr>
-                <tr><td><code>{{now}}</code></td><td>Current date</td></tr>
-                <tr><td><code>{{year field}}</code></td><td>2025</td></tr>
-                <tr><td><code>{{monthName 5}}</code></td><td>June</td></tr>
-                <tr><td><code>{{dayOfWeek field}}</code></td><td>Mon, Tue, etc.</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🔤 String & Logic Helpers</h4>
-            <table class="schema-table">
-                <tr><th>Helper</th><th>Output</th></tr>
-                <tr><td><code>{{uppercase str}}</code></td><td>UPPERCASE</td></tr>
-                <tr><td><code>{{lowercase str}}</code></td><td>lowercase</td></tr>
-                <tr><td><code>{{truncate str 20}}</code></td><td>First 20 chars...</td></tr>
-                <tr><td><code>{{replace str "old" "new"}}</code></td><td>String replacement</td></tr>
-                <tr><td><code>{{#if (eq Status "Active")}}...{{/if}}</code></td><td>Conditional</td></tr>
-                <tr><td><code>{{#if (gt count 10)}}...{{/if}}</code></td><td>Numeric comparison</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🏷️ Report Modes (Filter_Mode)</h4>
-            <table class="schema-table">
-                <tr><th>Mode</th><th>Behaviour</th></tr>
-                <tr><td><code>record</code></td><td>Uses the selected record from the linked widget. Linked tables auto-filtered.</td></tr>
-                <tr><td><code>all</code></td><td>Fetches all data, renders immediately. No filter popup.</td></tr>
-                <tr><td><code>filtered</code></td><td>Shows filter popup before rendering. Define filters in the Filters JSON column.</td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">🔍 Filter Types (Filters JSON)</h4>
-            <table class="schema-table">
-                <tr><th>Type</th><th>UI</th><th>Example</th></tr>
-                <tr><td><code>choice</code></td><td>Multi-select checkboxes</td><td><code>{"field":"Status","label":"Status","type":"choice","table":"Contacts"}</code></td></tr>
-                <tr><td><code>date-range</code></td><td>From/To date pickers</td><td><code>{"field":"Last_Updated","label":"Updated","type":"date-range","table":"Contacts"}</code></td></tr>
-                <tr><td><code>number-range</code></td><td>Min/Max inputs</td><td><code>{"field":"Score","label":"Score","type":"number-range","table":"Contacts"}</code></td></tr>
-                <tr><td><code>text</code></td><td>Free text search</td><td><code>{"field":"Last_Name","label":"Name","type":"text","table":"Contacts"}</code></td></tr>
-                <tr><td><code>boolean</code></td><td>Checkbox</td><td><code>{"field":"Active","label":"Active only","type":"boolean","table":"Contacts"}</code></td></tr>
-            </table>
-
-            <h4 style="margin:16px 0 8px; color:#16b378;">📋 SysReports Table Columns</h4>
-            <table class="schema-table">
-                <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
-                <tr><td>Report_Name</td><td>Text</td><td>Display name</td></tr>
-                <tr><td>Description</td><td>Text</td><td>Shown in picker</td></tr>
-                <tr><td>Link_Table</td><td>Text</td><td>Which page this report appears on</td></tr>
-                <tr><td>Data_Tables</td><td>Text</td><td>Comma-separated tables to fetch</td></tr>
-                <tr><td>Filter_Mode</td><td>Choice</td><td>record / all / filtered</td></tr>
-                <tr><td>Template_HTML</td><td>Text</td><td>The Handlebars HTML template</td></tr>
-                <tr><td>Filters</td><td>Text</td><td>JSON array of filter definitions</td></tr>
-                <tr><td>Assets</td><td>Attachments</td><td>Logos, images (reference via data-asset)</td></tr>
-            </table>
-        </div>
-        `;
-    }
-
-    const WIDGET_NAME = "Report Builder";
-    const WIDGET_VERSION = "1.0.1";
-
-    // ── Initialise ──────────────────────────────────────────────────────────
-    console.log(`📋 ${WIDGET_NAME} v${WIDGET_VERSION} loading...`);
-    setTimeout(async () => {
+    async function init() {
         try {
-            console.log(`📋 ${WIDGET_NAME}: Fetching schema...`);
             schema = await getSchema();
-            console.log(`📋 ${WIDGET_NAME}: Schema loaded (${Object.keys(schema).length} tables)`);
-            console.log(`📋 ${WIDGET_NAME}: Fetching ${REPORTS_TABLE}...`);
-            reports = await fetchTable(REPORTS_TABLE);
-            reports = reports.filter(r => r.Active === true);
-            console.log(`📋 ${WIDGET_NAME}: ${reports.length} active reports loaded`);
-            renderCreatePanel();
-        } catch(e) {
-            console.error(`📋 ${WIDGET_NAME}: Init failed:`, e);
-            document.getElementById("panel-create").innerHTML = `<div class="status status-error">Error: ${e.message}<br><small>${WIDGET_NAME} v${WIDGET_VERSION}</small></div>`;
-        }
-    }, 500);
+            statusEl.textContent = Object.keys(schema).length + " tables";
 
+            // Populate link table dropdown
+            const linkSelect = document.getElementById("rpt-link");
+            Object.keys(schema).forEach(t => {
+                const opt = document.createElement("option");
+                opt.value = t; opt.textContent = t;
+                linkSelect.appendChild(opt);
+            });
+
+            addMessage("ai", "Hi! Describe the report you'd like to build. I'll ask a few questions to refine the requirements, then generate the template for you.\n\nYou can also fill in the form fields on the right manually — I'll use whatever's there as context.");
+            await populateExistingReports();
+        } catch(e) {
+            statusEl.textContent = "Error";
+            addMessage("system", "⚠️ Could not connect to Grist: " + e.message);
+        }
+    }
+
+    init();
 })();
 </script>
 </body>
